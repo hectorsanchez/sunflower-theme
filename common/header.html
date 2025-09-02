@@ -2,247 +2,333 @@
 // Discourse Admin Users Location Column
 // Este script agrega una columna "Location" a la vista de administración de usuarios
 
-$(document).ready(function() {
-  // Cache para almacenar las ubicaciones de los usuarios
-  const userLocationCache = new Map();
-  
-  // Función para obtener la ubicación de un usuario desde la API
-  async function getUserLocation(username) {
-    if (userLocationCache.has(username)) {
-      return userLocationCache.get(username);
+// Función para esperar a que Discourse esté completamente cargado
+function waitForDiscourse() {
+  return new Promise((resolve) => {
+    if (window.Discourse && window.Discourse.__container__) {
+      resolve();
+    } else {
+      const checkInterval = setInterval(() => {
+        if (window.Discourse && window.Discourse.__container__) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
     }
-    
-    try {
-      // Hacer una llamada a la API de Discourse para obtener el perfil del usuario
-      const response = await fetch(`/u/${username}.json`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        let location = 'N/A';
-        
-        // Buscar la ubicación en los campos del usuario
-        if (userData.user && userData.user.user_fields) {
-          // Buscar en campos personalizados (user_fields)
-          for (let i = 1; i <= 20; i++) {
-            const fieldKey = `user_field_${i}`;
-            if (userData.user.user_fields[fieldKey]) {
-              const fieldValue = userData.user.user_fields[fieldKey];
-              // Buscar si contiene información de ubicación
-              if (fieldValue && typeof fieldValue === 'string' && 
-                  (fieldValue.toLowerCase().includes('location') || 
-                   fieldValue.toLowerCase().includes('ubicación') ||
-                   fieldValue.toLowerCase().includes('city') ||
-                   fieldValue.toLowerCase().includes('country'))) {
-                location = fieldValue;
-                break;
-              }
-            }
-          }
-        }
-        
-        // Si no se encontró en user_fields, buscar en otros campos
-        if (location === 'N/A' && userData.user) {
-          // Buscar en el campo "location" estándar de Discourse
-          if (userData.user.location) {
-            location = userData.user.location;
-          }
-          // Buscar en el campo "bio" o "about"
-          else if (userData.user.bio_excerpt && userData.user.bio_excerpt.includes('Location:')) {
-            const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
-            if (bioMatch) {
-              location = bioMatch[1].trim();
-            }
-          }
-        }
-        
-        // Guardar en cache
-        userLocationCache.set(username, location);
-        return location;
+  });
+}
+
+// Función para esperar a que un elemento esté disponible en el DOM
+function waitForElement(selector, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      resolve(element);
+      return;
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        obs.disconnect();
+        resolve(element);
       }
-    } catch (error) {
-      console.log('Error obteniendo ubicación del usuario:', error);
-    }
-    
-    // Si falla, guardar N/A en cache para evitar reintentos
-    userLocationCache.set(username, 'N/A');
-    return 'N/A';
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    // Timeout después de 10 segundos
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`Elemento ${selector} no encontrado después de ${timeout}ms`));
+    }, timeout);
+  });
+}
+
+// Función para agregar event listeners de manera compatible
+function addEventListenerSafe(element, event, handler) {
+  if (element && typeof element.addEventListener === 'function') {
+    element.addEventListener(event, handler);
+  }
+}
+
+// Cache para almacenar las ubicaciones de los usuarios
+const userLocationCache = new Map();
+
+// Función para obtener la ubicación de un usuario desde la API
+async function getUserLocation(username) {
+  if (userLocationCache.has(username)) {
+    return userLocationCache.get(username);
   }
   
-  // Función para agregar la columna Location
-  function addLocationColumn() {
-    // Verificar si estamos en la página de administración de usuarios
-    if (window.location.pathname.includes('/admin/users/list/')) {
+  try {
+    // Hacer una llamada a la API de Discourse para obtener el perfil del usuario
+    const response = await fetch(`/u/${username}.json`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+    
+    if (response.ok) {
+      const userData = await response.json();
+      let location = 'N/A';
       
-      // Esperar a que la tabla se cargue completamente
-      setTimeout(function() {
-        const table = document.querySelector('.admin-users-table table');
-        if (!table) return;
-        
-        const thead = table.querySelector('thead tr');
-        const tbody = table.querySelector('tbody');
-        
-        if (!thead || !tbody) return;
-        
-        // Verificar si ya se agregó la columna
-        if (thead.querySelector('.location-column-header')) return;
-        
-        // Agregar encabezado de columna
-        const locationHeader = document.createElement('th');
-        locationHeader.className = 'location-column-header';
-        locationHeader.textContent = 'Location';
-        locationHeader.style.minWidth = '120px';
-        locationHeader.style.textAlign = 'center';
-        
-        // Insertar después de la columna "Last Posted" o antes de la última columna
-        const lastPostedHeader = thead.querySelector('th:last-child');
-        if (lastPostedHeader) {
-          thead.insertBefore(locationHeader, lastPostedHeader);
-        } else {
-          thead.appendChild(locationHeader);
-        }
-        
-        // Agregar celdas de datos para cada fila
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(function(row) {
-          const locationCell = document.createElement('td');
-          locationCell.className = 'location-column-data';
-          locationCell.style.textAlign = 'center';
-          locationCell.style.verticalAlign = 'middle';
-          
-          // Obtener el username de la fila
-          const usernameLink = row.querySelector('td:first-child a');
-          if (usernameLink) {
-            const username = usernameLink.textContent.trim();
-            
-            // Mostrar "Cargando..." inicialmente
-            locationCell.textContent = 'Cargando...';
-            locationCell.style.fontStyle = 'italic';
-            locationCell.style.color = '#666';
-            
-            // Obtener la ubicación del usuario
-            getUserLocation(username).then(location => {
-              locationCell.textContent = location;
-              locationCell.style.fontStyle = 'normal';
-              locationCell.style.color = '#40312a';
-              
-              // Aplicar estilos especiales para ubicaciones válidas
-              if (location !== 'N/A') {
-                locationCell.style.fontWeight = '500';
-                locationCell.style.color = '#8A4A19';
-              }
-            });
-          } else {
-            locationCell.textContent = 'N/A';
+      // Buscar la ubicación en los campos del usuario
+      if (userData.user && userData.user.user_fields) {
+        // Buscar en campos personalizados (user_fields)
+        for (let i = 1; i <= 20; i++) {
+          const fieldKey = `user_field_${i}`;
+          if (userData.user.user_fields[fieldKey]) {
+            const fieldValue = userData.user.user_fields[fieldKey];
+            // Buscar si contiene información de ubicación
+            if (fieldValue && typeof fieldValue === 'string' && 
+                (fieldValue.toLowerCase().includes('location') || 
+                 fieldValue.toLowerCase().includes('ubicación') ||
+                 fieldValue.toLowerCase().includes('city') ||
+                 fieldValue.toLowerCase().includes('country'))) {
+              location = fieldValue;
+              break;
+            }
           }
+        }
+      }
+      
+      // Si no se encontró en user_fields, buscar en otros campos
+      if (location === 'N/A' && userData.user) {
+        // Buscar en el campo "location" estándar de Discourse
+        if (userData.user.location) {
+          location = userData.user.location;
+        }
+        // Buscar en el campo "bio" o "about"
+        else if (userData.user.bio_excerpt && userData.user.bio_excerpt.includes('Location:')) {
+          const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
+          if (bioMatch) {
+            location = bioMatch[1].trim();
+          }
+        }
+      }
+      
+      // Guardar en cache
+      userLocationCache.set(username, location);
+      return location;
+    }
+  } catch (error) {
+    console.log('Error obteniendo ubicación del usuario:', error);
+  }
+  
+  // Si falla, guardar N/A en cache para evitar reintentos
+  userLocationCache.set(username, 'N/A');
+  return 'N/A';
+}
+
+// Función para agregar la columna Location
+async function addLocationColumn() {
+  try {
+    // Verificar si estamos en la página de administración de usuarios
+    if (!window.location.pathname.includes('/admin/users/list/')) {
+      return;
+    }
+    
+    // Esperar a que la tabla se cargue completamente
+    const table = await waitForElement('.admin-users-table table', 15000);
+    if (!table) return;
+    
+    const thead = table.querySelector('thead tr');
+    const tbody = table.querySelector('tbody');
+    
+    if (!thead || !tbody) return;
+    
+    // Verificar si ya se agregó la columna
+    if (thead.querySelector('.location-column-header')) return;
+    
+    // Agregar encabezado de columna
+    const locationHeader = document.createElement('th');
+    locationHeader.className = 'location-column-header';
+    locationHeader.textContent = 'Location';
+    locationHeader.style.minWidth = '120px';
+    locationHeader.style.textAlign = 'center';
+    
+    // Insertar después de la columna "Last Posted" o antes de la última columna
+    const lastPostedHeader = thead.querySelector('th:last-child');
+    if (lastPostedHeader) {
+      thead.insertBefore(locationHeader, lastPostedHeader);
+    } else {
+      thead.appendChild(locationHeader);
+    }
+    
+    // Agregar celdas de datos para cada fila
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(function(row) {
+      const locationCell = document.createElement('td');
+      locationCell.className = 'location-column-data';
+      locationCell.style.textAlign = 'center';
+      locationCell.style.verticalAlign = 'middle';
+      
+      // Obtener el username de la fila
+      const usernameLink = row.querySelector('td:first-child a');
+      if (usernameLink) {
+        const username = usernameLink.textContent.trim();
+        
+        // Mostrar "Cargando..." inicialmente
+        locationCell.textContent = 'Cargando...';
+        locationCell.style.fontStyle = 'italic';
+        locationCell.style.color = '#666';
+        
+        // Obtener la ubicación del usuario
+        getUserLocation(username).then(location => {
+          locationCell.textContent = location;
+          locationCell.style.fontStyle = 'normal';
+          locationCell.style.color = '#40312a';
           
-          // Insertar la celda en la posición correcta
-          const lastCell = row.querySelector('td:last-child');
-          if (lastCell) {
-            row.insertBefore(locationCell, lastCell);
-          } else {
-            row.appendChild(locationCell);
+          // Aplicar estilos especiales para ubicaciones válidas
+          if (location !== 'N/A') {
+            locationCell.style.fontWeight = '500';
+            locationCell.style.color = '#8A4A19';
           }
         });
-        
-        // Aplicar estilos CSS personalizados
-        const style = document.createElement('style');
-        style.textContent = `
-          .location-column-header {
-            background-color: #f4d35e !important;
-            color: #40312a !important;
-            font-weight: 600 !important;
-            border: 1px solid #e0c052 !important;
-            padding: 8px 12px !important;
-            text-align: center !important;
-            vertical-align: middle !important;
-          }
-          
-          .location-column-data {
-            background-color: #faf0ca !important;
-            border: 1px solid #eadac9 !important;
-            color: #40312a !important;
-            font-size: 0.9em !important;
-            padding: 8px 12px !important;
-            text-align: center !important;
-            vertical-align: middle !important;
-            transition: all 0.2s ease !important;
-          }
-          
-          .location-column-data:hover {
-            background-color: #f0c052 !important;
-            color: #212121 !important;
-            transform: scale(1.02) !important;
-          }
-          
-          /* Estilos para la tabla completa */
-          .admin-users-table table {
-            border-collapse: collapse !important;
-          }
-          
-          .admin-users-table th,
-          .admin-users-table td {
-            border: 1px solid #eadac9 !important;
-          }
-        `;
-        document.head.appendChild(style);
-        
-      }, 2000); // Esperar 2 segundos para que la tabla se cargue
-    }
-  }
-  
-  // Función para limpiar la columna cuando se cambia de página
-  function cleanupLocationColumn() {
-    const existingHeader = document.querySelector('.location-column-header');
-    const existingCells = document.querySelectorAll('.location-column-data');
-    const existingStyle = document.querySelector('style[data-location-column]');
+      } else {
+        locationCell.textContent = 'N/A';
+      }
+      
+      // Insertar la celda en la posición correcta
+      const lastCell = row.querySelector('td:last-child');
+      if (lastCell) {
+        row.insertBefore(locationCell, lastCell);
+      } else {
+        row.appendChild(locationCell);
+      }
+    });
     
-    if (existingHeader) existingHeader.remove();
-    existingCells.forEach(cell => cell.remove());
-    if (existingStyle) existingStyle.remove();
+    // Aplicar estilos CSS personalizados
+    const style = document.createElement('style');
+    style.setAttribute('data-location-column', 'true');
+    style.textContent = `
+      .location-column-header {
+        background-color: #f4d35e !important;
+        color: #40312a !important;
+        font-weight: 600 !important;
+        border: 1px solid #e0c052 !important;
+        padding: 8px 12px !important;
+        text-align: center !important;
+        vertical-align: middle !important;
+      }
+      
+      .location-column-data {
+        background-color: #faf0ca !important;
+        border: 1px solid #eadac9 !important;
+        color: #40312a !important;
+        font-size: 0.9em !important;
+        padding: 8px 12px !important;
+        text-align: center !important;
+        vertical-align: middle !important;
+        transition: all 0.2s ease !important;
+      }
+      
+      .location-column-data:hover {
+        background-color: #f0c052 !important;
+        color: #212121 !important;
+        transform: scale(1.02) !important;
+      }
+      
+      /* Estilos para la tabla completa */
+      .admin-users-table table {
+        border-collapse: collapse !important;
+      }
+      
+      .admin-users-table th,
+      .admin-users-table td {
+        border: 1px solid #eadac9 !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    console.log('✅ Columna Location agregada exitosamente');
+    
+  } catch (error) {
+    console.log('❌ Error agregando columna Location:', error);
   }
+}
+
+// Función para limpiar la columna cuando se cambia de página
+function cleanupLocationColumn() {
+  const existingHeader = document.querySelector('.location-column-header');
+  const existingCells = document.querySelectorAll('.location-column-data');
+  const existingStyle = document.querySelector('style[data-location-column]');
   
-  // Ejecutar cuando se carga la página
-  addLocationColumn();
-  
-  // Ejecutar cuando cambia la URL (navegación SPA de Discourse)
-  let currentUrl = window.location.href;
-  const observer = new MutationObserver(function() {
-    if (window.location.href !== currentUrl) {
-      currentUrl = window.location.href;
-      
-      // Limpiar columna anterior
-      cleanupLocationColumn();
-      
-      // Agregar nueva columna
-      setTimeout(addLocationColumn, 1000);
-    }
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  // También ejecutar cuando se hace clic en enlaces de navegación
-  $(document).on('click', 'a[href*="/admin/users/list/"]', function() {
-    setTimeout(() => {
-      cleanupLocationColumn();
-      addLocationColumn();
-    }, 1000);
-  });
-  
-  // Ejecutar cuando se cambia entre pestañas (Active, New, Staff, etc.)
-  $(document).on('click', '.admin-users-tabs__active a, .admin-users-tabs__new a, .admin-users-tabs__staff a, .admin-users-tabs__suspended a, .admin-users-tabs__silenced a, .admin-users-tabs__staged a', function() {
-    setTimeout(() => {
-      cleanupLocationColumn();
-      addLocationColumn();
-    }, 1500);
-  });
-});
+  if (existingHeader) existingHeader.remove();
+  existingCells.forEach(cell => cell.remove());
+  if (existingStyle) existingStyle.remove();
+}
+
+// Función principal que se ejecuta cuando Discourse esté listo
+async function initLocationColumn() {
+  try {
+    // Esperar a que Discourse esté completamente cargado
+    await waitForDiscourse();
+    
+    // Ejecutar cuando se carga la página
+    await addLocationColumn();
+    
+    // Ejecutar cuando cambia la URL (navegación SPA de Discourse)
+    let currentUrl = window.location.href;
+    const observer = new MutationObserver(function() {
+      if (window.location.href !== currentUrl) {
+        currentUrl = window.location.href;
+        
+        // Limpiar columna anterior
+        cleanupLocationColumn();
+        
+        // Agregar nueva columna
+        setTimeout(addLocationColumn, 1000);
+      }
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // También ejecutar cuando se hace clic en enlaces de navegación
+    document.addEventListener('click', function(event) {
+      const target = event.target.closest('a');
+      if (target && target.href && target.href.includes('/admin/users/list/')) {
+        setTimeout(() => {
+          cleanupLocationColumn();
+          addLocationColumn();
+        }, 1000);
+      }
+    });
+    
+    // Ejecutar cuando se cambia entre pestañas (Active, New, Staff, etc.)
+    document.addEventListener('click', function(event) {
+      const target = event.target.closest('a');
+      if (target && target.classList.contains('ember-view')) {
+        const href = target.getAttribute('href');
+        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups'))) {
+          setTimeout(() => {
+            cleanupLocationColumn();
+            addLocationColumn();
+          }, 1500);
+        }
+      }
+    });
+    
+    console.log('🚀 Columna Location inicializada correctamente');
+    
+  } catch (error) {
+    console.log('❌ Error inicializando columna Location:', error);
+  }
+}
+
+// Iniciar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLocationColumn);
+} else {
+  initLocationColumn();
+}
 </script>
