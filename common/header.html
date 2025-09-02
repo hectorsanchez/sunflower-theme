@@ -48,6 +48,71 @@ function waitForElement(selector, timeout = 10000) {
   });
 }
 
+// Función para encontrar la tabla de usuarios de administración
+function findAdminUsersTable() {
+  // Intentar diferentes selectores para encontrar la tabla
+  const selectors = [
+    '.admin-users-table table',
+    '.admin-users table',
+    '.users-table table',
+    'table.admin-users-table',
+    'table.admin-users',
+    'table.users-table',
+    '.admin-users-list table',
+    '.admin-users-list',
+    'table[data-table-name="admin-users"]',
+    'table[data-table-name="users"]',
+    // Selectores más genéricos
+    'table thead th:contains("Username")',
+    'table thead th:contains("Name")',
+    'table thead th:contains("Email")',
+    // Buscar por contenido de la tabla
+    'table:has(th:contains("Username"))',
+    'table:has(th:contains("Name"))',
+    'table:has(th:contains("Email"))'
+  ];
+
+  for (const selector of selectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        console.log(`✅ Tabla encontrada con selector: ${selector}`);
+        return element;
+      }
+    } catch (e) {
+      // Ignorar errores de selectores inválidos
+    }
+  }
+
+  // Si no se encuentra con selectores específicos, buscar por contenido
+  const allTables = document.querySelectorAll('table');
+  for (const table of allTables) {
+    const thead = table.querySelector('thead');
+    if (thead) {
+      const headers = thead.querySelectorAll('th');
+      let hasUsername = false;
+      let hasEmail = false;
+      
+      for (const header of headers) {
+        const text = header.textContent.toLowerCase();
+        if (text.includes('username') || text.includes('name')) {
+          hasUsername = true;
+        }
+        if (text.includes('email')) {
+          hasEmail = true;
+        }
+      }
+      
+      if (hasUsername && hasEmail) {
+        console.log('✅ Tabla encontrada por contenido (username + email)');
+        return table;
+      }
+    }
+  }
+
+  return null;
+}
+
 // Función para agregar event listeners de manera compatible
 function addEventListenerSafe(element, event, handler) {
   if (element && typeof element.addEventListener === 'function') {
@@ -131,20 +196,39 @@ async function addLocationColumn() {
   try {
     // Verificar si estamos en la página de administración de usuarios
     if (!window.location.pathname.includes('/admin/users/list/')) {
+      console.log('📍 No estamos en la página de administración de usuarios');
       return;
     }
     
-    // Esperar a que la tabla se cargue completamente
-    const table = await waitForElement('.admin-users-table table', 15000);
-    if (!table) return;
+    console.log('🔍 Buscando tabla de usuarios...');
+    
+    // Esperar un poco más para que la página se cargue completamente
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Buscar la tabla usando nuestra función personalizada
+    const table = findAdminUsersTable();
+    if (!table) {
+      console.log('❌ No se pudo encontrar la tabla de usuarios');
+      // Intentar de nuevo en unos segundos
+      setTimeout(addLocationColumn, 3000);
+      return;
+    }
     
     const thead = table.querySelector('thead tr');
     const tbody = table.querySelector('tbody');
     
-    if (!thead || !tbody) return;
+    if (!thead || !tbody) {
+      console.log('❌ No se encontró thead o tbody en la tabla');
+      return;
+    }
     
     // Verificar si ya se agregó la columna
-    if (thead.querySelector('.location-column-header')) return;
+    if (thead.querySelector('.location-column-header')) {
+      console.log('✅ La columna Location ya está presente');
+      return;
+    }
+    
+    console.log('📊 Agregando columna Location...');
     
     // Agregar encabezado de columna
     const locationHeader = document.createElement('th');
@@ -163,7 +247,9 @@ async function addLocationColumn() {
     
     // Agregar celdas de datos para cada fila
     const rows = tbody.querySelectorAll('tr');
-    rows.forEach(function(row) {
+    console.log(`📝 Agregando celdas para ${rows.length} filas...`);
+    
+    rows.forEach(function(row, index) {
       const locationCell = document.createElement('td');
       locationCell.className = 'location-column-data';
       locationCell.style.textAlign = 'center';
@@ -236,12 +322,18 @@ async function addLocationColumn() {
       }
       
       /* Estilos para la tabla completa */
-      .admin-users-table table {
+      .admin-users-table table,
+      .admin-users table,
+      .users-table table {
         border-collapse: collapse !important;
       }
       
       .admin-users-table th,
-      .admin-users-table td {
+      .admin-users-table td,
+      .admin-users th,
+      .admin-users td,
+      .users-table th,
+      .users-table td {
         border: 1px solid #eadac9 !important;
       }
     `;
@@ -251,6 +343,8 @@ async function addLocationColumn() {
     
   } catch (error) {
     console.log('❌ Error agregando columna Location:', error);
+    // Intentar de nuevo en unos segundos
+    setTimeout(addLocationColumn, 3000);
   }
 }
 
@@ -270,6 +364,8 @@ async function initLocationColumn() {
   try {
     // Esperar a que Discourse esté completamente cargado
     await waitForDiscourse();
+    
+    console.log('🚀 Inicializando columna Location...');
     
     // Ejecutar cuando se carga la página
     await addLocationColumn();
