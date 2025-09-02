@@ -113,6 +113,44 @@ function findAdminUsersTable() {
   return null;
 }
 
+// Función para analizar la estructura de la tabla encontrada
+function analyzeTableStructure(table) {
+  console.log('🔍 Analizando estructura de la tabla...');
+  
+  // Verificar si tiene thead/tbody tradicional
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+  
+  if (thead && tbody) {
+    console.log('✅ Estructura tradicional: thead + tbody');
+    return { type: 'traditional', thead, tbody };
+  }
+  
+  // Si no tiene thead/tbody, buscar filas directamente
+  const allRows = table.querySelectorAll('tr');
+  if (allRows.length > 0) {
+    console.log(`📊 Encontradas ${allRows.length} filas en la tabla`);
+    
+    // La primera fila suele ser el encabezado
+    const headerRow = allRows[0];
+    const dataRows = Array.from(allRows).slice(1);
+    
+    console.log('✅ Estructura alternativa: filas directas');
+    return { type: 'alternative', headerRow, dataRows, allRows };
+  }
+  
+  // Si no hay filas, buscar en elementos hijos
+  const childElements = table.children;
+  console.log(`🔍 Tabla tiene ${childElements.length} elementos hijos`);
+  
+  for (let i = 0; i < childElements.length; i++) {
+    const child = childElements[i];
+    console.log(`  - Elemento ${i}: ${child.tagName} (${child.className})`);
+  }
+  
+  return null;
+}
+
 // Función para agregar event listeners de manera compatible
 function addEventListenerSafe(element, event, handler) {
   if (element && typeof element.addEventListener === 'function') {
@@ -214,130 +252,31 @@ async function addLocationColumn() {
       return;
     }
     
-    const thead = table.querySelector('thead tr');
-    const tbody = table.querySelector('tbody');
-    
-    if (!thead || !tbody) {
-      console.log('❌ No se encontró thead o tbody en la tabla');
+    // Analizar la estructura de la tabla
+    const structure = analyzeTableStructure(table);
+    if (!structure) {
+      console.log('❌ No se pudo analizar la estructura de la tabla');
       return;
     }
     
     // Verificar si ya se agregó la columna
-    if (thead.querySelector('.location-column-header')) {
+    if (table.querySelector('.location-column-header')) {
       console.log('✅ La columna Location ya está presente');
       return;
     }
     
     console.log('📊 Agregando columna Location...');
     
-    // Agregar encabezado de columna
-    const locationHeader = document.createElement('th');
-    locationHeader.className = 'location-column-header';
-    locationHeader.textContent = 'Location';
-    locationHeader.style.minWidth = '120px';
-    locationHeader.style.textAlign = 'center';
-    
-    // Insertar después de la columna "Last Posted" o antes de la última columna
-    const lastPostedHeader = thead.querySelector('th:last-child');
-    if (lastPostedHeader) {
-      thead.insertBefore(locationHeader, lastPostedHeader);
-    } else {
-      thead.appendChild(locationHeader);
+    if (structure.type === 'traditional') {
+      // Estructura tradicional con thead/tbody
+      await addColumnToTraditionalTable(structure.thead, structure.tbody);
+    } else if (structure.type === 'alternative') {
+      // Estructura alternativa con filas directas
+      await addColumnToAlternativeTable(structure.headerRow, structure.dataRows);
     }
     
-    // Agregar celdas de datos para cada fila
-    const rows = tbody.querySelectorAll('tr');
-    console.log(`📝 Agregando celdas para ${rows.length} filas...`);
-    
-    rows.forEach(function(row, index) {
-      const locationCell = document.createElement('td');
-      locationCell.className = 'location-column-data';
-      locationCell.style.textAlign = 'center';
-      locationCell.style.verticalAlign = 'middle';
-      
-      // Obtener el username de la fila
-      const usernameLink = row.querySelector('td:first-child a');
-      if (usernameLink) {
-        const username = usernameLink.textContent.trim();
-        
-        // Mostrar "Cargando..." inicialmente
-        locationCell.textContent = 'Cargando...';
-        locationCell.style.fontStyle = 'italic';
-        locationCell.style.color = '#666';
-        
-        // Obtener la ubicación del usuario
-        getUserLocation(username).then(location => {
-          locationCell.textContent = location;
-          locationCell.style.fontStyle = 'normal';
-          locationCell.style.color = '#40312a';
-          
-          // Aplicar estilos especiales para ubicaciones válidas
-          if (location !== 'N/A') {
-            locationCell.style.fontWeight = '500';
-            locationCell.style.color = '#8A4A19';
-          }
-        });
-      } else {
-        locationCell.textContent = 'N/A';
-      }
-      
-      // Insertar la celda en la posición correcta
-      const lastCell = row.querySelector('td:last-child');
-      if (lastCell) {
-        row.insertBefore(locationCell, lastCell);
-      } else {
-        row.appendChild(locationCell);
-      }
-    });
-    
     // Aplicar estilos CSS personalizados
-    const style = document.createElement('style');
-    style.setAttribute('data-location-column', 'true');
-    style.textContent = `
-      .location-column-header {
-        background-color: #f4d35e !important;
-        color: #40312a !important;
-        font-weight: 600 !important;
-        border: 1px solid #e0c052 !important;
-        padding: 8px 12px !important;
-        text-align: center !important;
-        vertical-align: middle !important;
-      }
-      
-      .location-column-data {
-        background-color: #faf0ca !important;
-        border: 1px solid #eadac9 !important;
-        color: #40312a !important;
-        font-size: 0.9em !important;
-        padding: 8px 12px !important;
-        text-align: center !important;
-        vertical-align: middle !important;
-        transition: all 0.2s ease !important;
-      }
-      
-      .location-column-data:hover {
-        background-color: #f0c052 !important;
-        color: #212121 !important;
-        transform: scale(1.02) !important;
-      }
-      
-      /* Estilos para la tabla completa */
-      .admin-users-table table,
-      .admin-users table,
-      .users-table table {
-        border-collapse: collapse !important;
-      }
-      
-      .admin-users-table th,
-      .admin-users-table td,
-      .admin-users th,
-      .admin-users td,
-      .users-table th,
-      .users-table td {
-        border: 1px solid #eadac9 !important;
-      }
-    `;
-    document.head.appendChild(style);
+    applyLocationColumnStyles();
     
     console.log('✅ Columna Location agregada exitosamente');
     
@@ -346,6 +285,157 @@ async function addLocationColumn() {
     // Intentar de nuevo en unos segundos
     setTimeout(addLocationColumn, 3000);
   }
+}
+
+// Función para agregar columna a tabla tradicional
+async function addColumnToTraditionalTable(thead, tbody) {
+  const headerRow = thead.querySelector('tr');
+  if (!headerRow) return;
+  
+  // Agregar encabezado de columna
+  const locationHeader = document.createElement('th');
+  locationHeader.className = 'location-column-header';
+  locationHeader.textContent = 'Location';
+  locationHeader.style.minWidth = '120px';
+  locationHeader.style.textAlign = 'center';
+  
+  // Insertar antes de la última columna
+  const lastHeader = headerRow.querySelector('th:last-child');
+  if (lastHeader) {
+    headerRow.insertBefore(locationHeader, lastHeader);
+  } else {
+    headerRow.appendChild(locationHeader);
+  }
+  
+  // Agregar celdas de datos
+  const rows = tbody.querySelectorAll('tr');
+  console.log(`📝 Agregando celdas para ${rows.length} filas...`);
+  
+  for (const row of rows) {
+    await addLocationCellToRow(row);
+  }
+}
+
+// Función para agregar columna a tabla alternativa
+async function addColumnToAlternativeTable(headerRow, dataRows) {
+  // Agregar encabezado de columna
+  const locationHeader = document.createElement('th');
+  locationHeader.className = 'location-column-header';
+  locationHeader.textContent = 'Location';
+  locationHeader.style.minWidth = '120px';
+  locationHeader.style.textAlign = 'center';
+  
+  // Insertar antes de la última columna
+  const lastHeader = headerRow.querySelector('th:last-child');
+  if (lastHeader) {
+    headerRow.insertBefore(locationHeader, lastHeader);
+  } else {
+    headerRow.appendChild(locationHeader);
+  }
+  
+  // Agregar celdas de datos
+  console.log(`📝 Agregando celdas para ${dataRows.length} filas...`);
+  
+  for (const row of dataRows) {
+    await addLocationCellToRow(row);
+  }
+}
+
+// Función para agregar celda de ubicación a una fila
+async function addLocationCellToRow(row) {
+  const locationCell = document.createElement('td');
+  locationCell.className = 'location-column-data';
+  locationCell.style.textAlign = 'center';
+  locationCell.style.verticalAlign = 'middle';
+  
+  // Obtener el username de la fila
+  const usernameLink = row.querySelector('td:first-child a');
+  if (usernameLink) {
+    const username = usernameLink.textContent.trim();
+    
+    // Mostrar "Cargando..." inicialmente
+    locationCell.textContent = 'Cargando...';
+    locationCell.style.fontStyle = 'italic';
+    locationCell.style.color = '#666';
+    
+    // Obtener la ubicación del usuario
+    getUserLocation(username).then(location => {
+      locationCell.textContent = location;
+      locationCell.style.fontStyle = 'normal';
+      locationCell.style.color = '#40312a';
+      
+      // Aplicar estilos especiales para ubicaciones válidas
+      if (location !== 'N/A') {
+        locationCell.style.fontWeight = '500';
+        locationCell.style.color = '#8A4A19';
+      }
+    });
+  } else {
+    locationCell.textContent = 'N/A';
+  }
+  
+  // Insertar la celda en la posición correcta
+  const lastCell = row.querySelector('td:last-child');
+  if (lastCell) {
+    row.insertBefore(locationCell, lastCell);
+  } else {
+    row.appendChild(locationCell);
+  }
+}
+
+// Función para aplicar estilos CSS
+function applyLocationColumnStyles() {
+  const style = document.createElement('style');
+  style.setAttribute('data-location-column', 'true');
+  style.textContent = `
+    .location-column-header {
+      background-color: #f4d35e !important;
+      color: #40312a !important;
+      font-weight: 600 !important;
+      border: 1px solid #e0c052 !important;
+      padding: 8px 12px !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+    }
+    
+    .location-column-data {
+      background-color: #faf0ca !important;
+      border: 1px solid #eadac9 !important;
+      color: #40312a !important;
+      font-size: 0.9em !important;
+      padding: 8px 12px !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      transition: all 0.2s ease !important;
+    }
+    
+    .location-column-data:hover {
+      background-color: #f0c052 !important;
+      color: #212121 !important;
+      transform: scale(1.02) !important;
+    }
+    
+    /* Estilos para la tabla completa */
+    .admin-users-table table,
+    .admin-users table,
+    .users-table table,
+    .admin-users-list table,
+    .admin-users-list {
+      border-collapse: collapse !important;
+    }
+    
+    .admin-users-table th,
+    .admin-users-table td,
+    .admin-users th,
+    .admin-users td,
+    .users-table th,
+    .users-table td,
+    .admin-users-list th,
+    .admin-users-list td {
+      border: 1px solid #eadac9 !important;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 // Función para limpiar la columna cuando se cambia de página
