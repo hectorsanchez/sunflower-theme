@@ -52,24 +52,15 @@ function waitForElement(selector, timeout = 10000) {
 function findAdminUsersTable() {
   // Intentar diferentes selectores para encontrar la tabla
   const selectors = [
-    '.admin-users-table table',
+    '.directory-table.users-list',
+    '.directory-table[role="table"]',
+    '.users-list',
+    '.admin-users-list',
     '.admin-users table',
-    '.users-table table',
+    '.admin-users-table table',
     'table.admin-users-table',
     'table.admin-users',
-    'table.users-table',
-    '.admin-users-list table',
-    '.admin-users-list',
-    'table[data-table-name="admin-users"]',
-    'table[data-table-name="users"]',
-    // Selectores más genéricos
-    'table thead th:contains("Username")',
-    'table thead th:contains("Name")',
-    'table thead th:contains("Email")',
-    // Buscar por contenido de la tabla
-    'table:has(th:contains("Username"))',
-    'table:has(th:contains("Name"))',
-    'table:has(th:contains("Email"))'
+    'table.users-table'
   ];
 
   for (const selector of selectors) {
@@ -85,28 +76,25 @@ function findAdminUsersTable() {
   }
 
   // Si no se encuentra con selectores específicos, buscar por contenido
-  const allTables = document.querySelectorAll('table');
+  const allTables = document.querySelectorAll('[role="table"], table');
   for (const table of allTables) {
-    const thead = table.querySelector('thead');
-    if (thead) {
-      const headers = thead.querySelectorAll('th');
-      let hasUsername = false;
-      let hasEmail = false;
-      
-      for (const header of headers) {
-        const text = header.textContent.toLowerCase();
-        if (text.includes('username') || text.includes('name')) {
-          hasUsername = true;
-        }
-        if (text.includes('email')) {
-          hasEmail = true;
-        }
+    const headers = table.querySelectorAll('[role="columnheader"], th');
+    let hasUsername = false;
+    let hasEmail = false;
+    
+    for (const header of headers) {
+      const text = header.textContent.toLowerCase();
+      if (text.includes('username') || text.includes('name')) {
+        hasUsername = true;
       }
-      
-      if (hasUsername && hasEmail) {
-        console.log('✅ Tabla encontrada por contenido (username + email)');
-        return table;
+      if (text.includes('email')) {
+        hasEmail = true;
       }
+    }
+    
+    if (hasUsername && hasEmail) {
+      console.log('✅ Tabla encontrada por contenido (username + email)');
+      return table;
     }
   }
 
@@ -116,6 +104,28 @@ function findAdminUsersTable() {
 // Función para analizar la estructura de la tabla encontrada
 function analyzeTableStructure(table) {
   console.log('🔍 Analizando estructura de la tabla...');
+  
+  // Verificar si es una tabla moderna de Discourse (CSS Grid + ARIA)
+  if (table.classList.contains('directory-table') || table.getAttribute('role') === 'table') {
+    console.log('✅ Estructura moderna: CSS Grid + ARIA roles');
+    
+    // Buscar encabezados de columna
+    const columnHeaders = table.querySelectorAll('.directory-table__column-header, [role="columnheader"]');
+    if (columnHeaders.length > 0) {
+      console.log(`📊 Encontrados ${columnHeaders.length} encabezados de columna`);
+      
+      // Buscar filas de datos
+      const dataRows = table.querySelectorAll('.directory-table__row, [role="row"]:not([role="columnheader"])');
+      console.log(`📝 Encontradas ${dataRows.length} filas de datos`);
+      
+      return { 
+        type: 'modern', 
+        table, 
+        columnHeaders: Array.from(columnHeaders), 
+        dataRows: Array.from(dataRows) 
+      };
+    }
+  }
   
   // Verificar si tiene thead/tbody tradicional
   const thead = table.querySelector('thead');
@@ -267,7 +277,10 @@ async function addLocationColumn() {
     
     console.log('📊 Agregando columna Location...');
     
-    if (structure.type === 'traditional') {
+    if (structure.type === 'modern') {
+      // Estructura moderna de Discourse (CSS Grid + ARIA)
+      await addColumnToModernTable(structure.table, structure.columnHeaders, structure.dataRows);
+    } else if (structure.type === 'traditional') {
       // Estructura tradicional con thead/tbody
       await addColumnToTraditionalTable(structure.thead, structure.tbody);
     } else if (structure.type === 'alternative') {
@@ -284,6 +297,115 @@ async function addLocationColumn() {
     console.log('❌ Error agregando columna Location:', error);
     // Intentar de nuevo en unos segundos
     setTimeout(addLocationColumn, 3000);
+  }
+}
+
+// Función para agregar columna a tabla moderna de Discourse
+async function addColumnToModernTable(table, columnHeaders, dataRows) {
+  console.log('🔧 Agregando columna a tabla moderna de Discourse...');
+  
+  // Crear encabezado de columna
+  const locationHeader = document.createElement('div');
+  locationHeader.className = 'directory-table__column-header location-column-header sortable';
+  locationHeader.setAttribute('aria-sort', 'none');
+  locationHeader.setAttribute('role', 'columnheader');
+  
+  const headerContents = document.createElement('div');
+  headerContents.className = 'header-contents';
+  headerContents.setAttribute('role', 'button');
+  headerContents.setAttribute('tabindex', '0');
+  headerContents.setAttribute('aria-label', 'Location');
+  headerContents.setAttribute('aria-pressed', 'false');
+  
+  const textSpan = document.createElement('span');
+  textSpan.className = 'text';
+  textSpan.textContent = 'Location';
+  
+  headerContents.appendChild(textSpan);
+  locationHeader.appendChild(headerContents);
+  
+  // Insertar el encabezado antes del último encabezado existente
+  if (columnHeaders.length > 0) {
+    const lastHeader = columnHeaders[columnHeaders.length - 1];
+    lastHeader.parentNode.insertBefore(locationHeader, lastHeader.nextSibling);
+  } else {
+    // Si no hay encabezados, insertar en el contenedor de encabezados
+    const headerContainer = table.querySelector('.directory-table__header');
+    if (headerContainer) {
+      headerContainer.appendChild(locationHeader);
+    }
+  }
+  
+  // Agregar celdas de datos
+  console.log(`📝 Agregando celdas para ${dataRows.length} filas...`);
+  
+  for (const row of dataRows) {
+    await addLocationCellToModernRow(row);
+  }
+  
+  // Actualizar el CSS Grid para incluir la nueva columna
+  updateGridColumns(table);
+}
+
+// Función para agregar celda de ubicación a una fila moderna
+async function addLocationCellToModernRow(row) {
+  const locationCell = document.createElement('div');
+  locationCell.className = 'directory-table__cell location-column-data';
+  locationCell.setAttribute('role', 'cell');
+  
+  // Obtener el username de la fila
+  const usernameCell = row.querySelector('.directory-table__cell--username, [data-username]');
+  let username = '';
+  
+  if (usernameCell) {
+    // Buscar el enlace del username
+    const usernameLink = usernameCell.querySelector('a');
+    if (usernameLink) {
+      username = usernameLink.textContent.trim();
+    } else {
+      username = usernameCell.textContent.trim();
+    }
+  }
+  
+  if (username) {
+    // Mostrar "Cargando..." inicialmente
+    locationCell.textContent = 'Cargando...';
+    locationCell.style.fontStyle = 'italic';
+    locationCell.style.color = '#666';
+    
+    // Obtener la ubicación del usuario
+    getUserLocation(username).then(location => {
+      locationCell.textContent = location;
+      locationCell.style.fontStyle = 'normal';
+      locationCell.style.color = '#40312a';
+      
+      // Aplicar estilos especiales para ubicaciones válidas
+      if (location !== 'N/A') {
+        locationCell.style.fontWeight = '500';
+        locationCell.style.color = '#8A4A19';
+      }
+    });
+  } else {
+    locationCell.textContent = 'N/A';
+  }
+  
+  // Insertar la celda en la posición correcta
+  const lastCell = row.querySelector('.directory-table__cell:last-child');
+  if (lastCell) {
+    row.insertBefore(locationCell, lastCell.nextSibling);
+  } else {
+    row.appendChild(locationCell);
+  }
+}
+
+// Función para actualizar las columnas del CSS Grid
+function updateGridColumns(table) {
+  const currentStyle = table.style.gridTemplateColumns;
+  if (currentStyle) {
+    // Agregar una columna más al grid
+    const newStyle = currentStyle.replace(/\)$/, ' minmax(min-content, 1fr))');
+    table.style.gridTemplateColumns = newStyle;
+    console.log('🔧 CSS Grid actualizado para incluir la nueva columna');
   }
 }
 
@@ -341,7 +463,7 @@ async function addColumnToAlternativeTable(headerRow, dataRows) {
   }
 }
 
-// Función para agregar celda de ubicación a una fila
+// Función para agregar celda de ubicación a una fila tradicional
 async function addLocationCellToRow(row) {
   const locationCell = document.createElement('td');
   locationCell.className = 'location-column-data';
@@ -415,12 +537,41 @@ function applyLocationColumnStyles() {
       transform: scale(1.02) !important;
     }
     
+    /* Estilos para tablas modernas de Discourse */
+    .directory-table .location-column-header {
+      background-color: #f4d35e !important;
+      color: #40312a !important;
+      font-weight: 600 !important;
+      border: 1px solid #e0c052 !important;
+      padding: 8px 12px !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+    }
+    
+    .directory-table .location-column-data {
+      background-color: #faf0ca !important;
+      border: 1px solid #eadac9 !important;
+      color: #40312a !important;
+      font-size: 0.9em !important;
+      padding: 8px 12px !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      transition: all 0.2s ease !important;
+    }
+    
+    .directory-table .location-column-data:hover {
+      background-color: #f0c052 !important;
+      color: #212121 !important;
+      transform: scale(1.02) !important;
+    }
+    
     /* Estilos para la tabla completa */
     .admin-users-table table,
     .admin-users table,
     .users-table table,
     .admin-users-list table,
-    .admin-users-list {
+    .admin-users-list,
+    .directory-table {
       border-collapse: collapse !important;
     }
     
@@ -431,7 +582,9 @@ function applyLocationColumnStyles() {
     .users-table th,
     .users-table td,
     .admin-users-list th,
-    .admin-users-list td {
+    .admin-users-list td,
+    .directory-table__column-header,
+    .directory-table__cell {
       border: 1px solid #eadac9 !important;
     }
   `;
