@@ -313,7 +313,8 @@ async function addLocationColumn() {
   try {
     // Verificar si estamos en una página de usuarios (admin o pública)
     const isAdminUsersPage = window.location.pathname.includes('/admin/users/list/');
-    const isPublicUsersPage = window.location.pathname.includes('/u') && window.location.search.includes('order=');
+    const isPublicUsersPage = window.location.pathname.includes('/u') && 
+      (window.location.search.includes('order=') || window.location.pathname === '/u');
     
     if (!isAdminUsersPage && !isPublicUsersPage) {
       console.log('📍 No estamos en una página de usuarios (admin o pública)');
@@ -764,10 +765,8 @@ function applyLocationColumnStyles() {
   style.setAttribute('data-location-column', 'true');
   style.textContent = `
     .location-column-header {
-      background-color: #f4d35e !important;
       color: #40312a !important;
       font-weight: 600 !important;
-      border: 1px solid #e0c052 !important;
       padding: 8px 12px !important;
       text-align: center !important;
       vertical-align: middle !important;
@@ -788,10 +787,8 @@ function applyLocationColumnStyles() {
     
     /* Estilos para tablas modernas de Discourse */
     .directory-table .location-column-header {
-      background-color: #f4d35e !important;
       color: #40312a !important;
       font-weight: 600 !important;
-      border: 1px solid #e0c052 !important;
       padding: 8px 12px !important;
       text-align: center !important;
       vertical-align: middle !important;
@@ -929,7 +926,7 @@ async function initLocationColumn() {
       if (target && target.href) {
         const href = target.href;
         const isAdminUsersLink = href.includes('/admin/users/list/');
-        const isPublicUsersLink = href.includes('/u') && href.includes('order=');
+        const isPublicUsersLink = href.includes('/u') && (href.includes('order=') || href.endsWith('/u'));
         
         if (isAdminUsersLink || isPublicUsersLink) {
           setTimeout(() => {
@@ -945,7 +942,7 @@ async function initLocationColumn() {
       const target = event.target.closest('a');
       if (target && target.classList.contains('ember-view')) {
         const href = target.getAttribute('href');
-        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups') || (href.includes('/u') && href.includes('order=')))) {
+        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups') || (href.includes('/u') && (href.includes('order=') || href.endsWith('/u'))))) {
           setTimeout(() => {
             cleanupLocationColumn();
             addLocationColumn();
