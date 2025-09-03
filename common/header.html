@@ -191,20 +191,29 @@ async function getUserLocation(username) {
       const userData = await response.json();
       let location = 'N/A';
       
+      console.log(`🔍 Analizando datos de usuario: ${username}`);
+      
       // Buscar la ubicación en los campos del usuario
       if (userData.user && userData.user.user_fields) {
+        console.log(`📋 Campos personalizados disponibles:`, Object.keys(userData.user.user_fields));
+        
         // Buscar en campos personalizados (user_fields)
         for (let i = 1; i <= 20; i++) {
           const fieldKey = `user_field_${i}`;
           if (userData.user.user_fields[fieldKey]) {
             const fieldValue = userData.user.user_fields[fieldKey];
+            console.log(`  - Campo ${fieldKey}: ${fieldValue}`);
+            
             // Buscar si contiene información de ubicación
             if (fieldValue && typeof fieldValue === 'string' && 
                 (fieldValue.toLowerCase().includes('location') || 
                  fieldValue.toLowerCase().includes('ubicación') ||
                  fieldValue.toLowerCase().includes('city') ||
-                 fieldValue.toLowerCase().includes('country'))) {
+                 fieldValue.toLowerCase().includes('country') ||
+                 fieldValue.toLowerCase().includes('país') ||
+                 fieldValue.toLowerCase().includes('ciudad'))) {
               location = fieldValue;
+              console.log(`✅ Ubicación encontrada en campo personalizado: ${location}`);
               break;
             }
           }
@@ -216,14 +225,34 @@ async function getUserLocation(username) {
         // Buscar en el campo "location" estándar de Discourse
         if (userData.user.location) {
           location = userData.user.location;
+          console.log(`✅ Ubicación encontrada en campo estándar: ${location}`);
         }
         // Buscar en el campo "bio" o "about"
         else if (userData.user.bio_excerpt && userData.user.bio_excerpt.includes('Location:')) {
           const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
           if (bioMatch) {
             location = bioMatch[1].trim();
+            console.log(`✅ Ubicación encontrada en bio: ${location}`);
           }
         }
+        // Buscar en el campo "about" completo
+        else if (userData.user.about) {
+          const aboutText = userData.user.about.toLowerCase();
+          if (aboutText.includes('location:') || aboutText.includes('ubicación:')) {
+            const aboutMatch = userData.user.about.match(/(?:location|ubicación):\s*([^\n]+)/i);
+            if (aboutMatch) {
+              location = aboutMatch[1].trim();
+              console.log(`✅ Ubicación encontrada en about: ${location}`);
+            }
+          }
+        }
+      }
+      
+      // Si se encontró ubicación, extraer el país
+      if (location !== 'N/A') {
+        const country = extractCountryFromLocation(location);
+        console.log(`🌍 País extraído: ${country} (de: ${location})`);
+        location = country;
       }
       
       // Guardar en cache
@@ -231,12 +260,29 @@ async function getUserLocation(username) {
       return location;
     }
   } catch (error) {
-    console.log('Error obteniendo ubicación del usuario:', error);
+    console.log(`❌ Error obteniendo ubicación del usuario ${username}:`, error);
   }
   
   // Si falla, guardar N/A en cache para evitar reintentos
   userLocationCache.set(username, 'N/A');
   return 'N/A';
+}
+
+// Función para extraer el país de la ubicación (basada en tu script de Python)
+function extractCountryFromLocation(location) {
+  if (!location || location === 'N/A') {
+    return 'Sin ubicación';
+  }
+
+  // Si la ubicación contiene una coma, tomar la última parte (país)
+  if (location.includes(',')) {
+    const parts = location.split(',');
+    const country = parts[parts.length - 1].trim();
+    return country;
+  }
+
+  // Si no hay coma, asumir que es solo el país
+  return location.trim();
 }
 
 // Función para agregar la columna Location
