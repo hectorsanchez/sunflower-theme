@@ -104,20 +104,15 @@ function findUsersTable() {
 
 // Función para analizar la estructura de la tabla encontrada
 function analyzeTableStructure(table) {
-  console.log('🔍 Analizando estructura de la tabla...');
-  
   // Verificar si es una tabla moderna de Discourse (CSS Grid + ARIA)
   if (table.classList.contains('directory-table') || table.getAttribute('role') === 'table') {
-    console.log('✅ Estructura moderna: CSS Grid + ARIA roles');
     
     // Buscar encabezados de columna
     const columnHeaders = table.querySelectorAll('.directory-table__column-header, [role="columnheader"]');
     if (columnHeaders.length > 0) {
-      console.log(`📊 Encontrados ${columnHeaders.length} encabezados de columna`);
       
       // Buscar filas de datos
       const dataRows = table.querySelectorAll('.directory-table__row, [role="row"]:not([role="columnheader"])');
-      console.log(`📝 Encontradas ${dataRows.length} filas de datos`);
       
       return { 
         type: 'modern', 
@@ -152,12 +147,7 @@ function analyzeTableStructure(table) {
   
   // Si no hay filas, buscar en elementos hijos
   const childElements = table.children;
-  console.log(`🔍 Tabla tiene ${childElements.length} elementos hijos`);
-  
-  for (let i = 0; i < childElements.length; i++) {
-    const child = childElements[i];
-    console.log(`  - Elemento ${i}: ${child.tagName} (${child.className})`);
-  }
+
   
   return null;
 }
@@ -563,7 +553,7 @@ async function addLocationFilter(table, dataRows) {
   
   // Crear etiqueta
   const label = document.createElement('label');
-  label.textContent = 'Filtrar por ubicación:';
+  label.textContent = 'Filter by Location:';
   label.style.cssText = `
     font-weight: 600;
     color: #40312a;
@@ -586,12 +576,12 @@ async function addLocationFilter(table, dataRows) {
   // Agregar opciones
   const allOption = document.createElement('option');
   allOption.value = 'all';
-  allOption.textContent = 'Todos los usuarios';
+  allOption.textContent = 'All users';
   select.appendChild(allOption);
   
   const noLocationOption = document.createElement('option');
   noLocationOption.value = 'no-location';
-  noLocationOption.textContent = 'Sin ubicación';
+  noLocationOption.textContent = 'No location';
   select.appendChild(noLocationOption);
   
   // Agregar opciones de ubicaciones
@@ -616,7 +606,7 @@ async function addLocationFilter(table, dataRows) {
   function updateCounter() {
     const visibleRows = table.querySelectorAll('.directory-table__row:not([style*="display: none"])');
     const totalRows = dataRows.length;
-    counter.textContent = `${visibleRows.length} de ${totalRows} usuarios`;
+    counter.textContent = `${visibleRows.length} of ${totalRows} users`;
   }
   
   // Función para filtrar
