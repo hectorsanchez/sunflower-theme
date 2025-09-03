@@ -183,25 +183,14 @@ async function getUserLocation(username) {
       }
     });
     
-    console.log(`📡 Respuesta de API recibida:`, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      url: response.url
-    });
+
     
     if (response.ok) {
       const userData = await response.json();
-      console.log(`📊 Datos completos del usuario ${username}:`, userData);
-      
       let location = 'N/A';
-      
-      console.log(`🔍 Analizando datos de usuario: ${username}`);
       
       // Verificar si tenemos datos del usuario
       if (!userData.user) {
-        console.log(`❌ No se encontró objeto 'user' en la respuesta`);
-        console.log(`📋 Estructura de la respuesta:`, Object.keys(userData));
         userLocationCache.set(username, 'N/A');
         return 'N/A';
       }
@@ -209,23 +198,17 @@ async function getUserLocation(username) {
       // Buscar la ubicación en el campo "location" estándar (que configuraste como público)
       if (userData.user.location) {
         location = userData.user.location;
-        console.log(`✅ Ubicación encontrada en campo estándar: ${location}`);
       } else {
-        console.log(`❌ Campo 'location' estándar no encontrado`);
       }
       
       // Si no se encontró en location estándar, buscar en campos personalizados públicos
       if (location === 'N/A' && userData.user.user_fields) {
-        console.log(`📋 Campos personalizados disponibles:`, Object.keys(userData.user.user_fields));
-        console.log(`📋 Valores de campos personalizados:`, userData.user.user_fields);
         
         // Buscar en campos personalizados (user_fields) que sean públicos
         for (let i = 1; i <= 20; i++) {
           const fieldKey = `user_field_${i}`;
           if (userData.user.user_fields[fieldKey]) {
             const fieldValue = userData.user.user_fields[fieldKey];
-            console.log(`  - Campo ${fieldKey}: ${fieldValue}`);
-            
             // Buscar si contiene información de ubicación
             if (fieldValue && typeof fieldValue === 'string' && 
                 (fieldValue.toLowerCase().includes('location') || 
@@ -235,49 +218,32 @@ async function getUserLocation(username) {
                  fieldValue.toLowerCase().includes('país') ||
                  fieldValue.toLowerCase().includes('ciudad'))) {
               location = fieldValue;
-              console.log(`✅ Ubicación encontrada en campo personalizado: ${location}`);
               break;
             }
           }
         }
       }
       
-      // Mostrar todos los campos disponibles del usuario para debugging
-      console.log(`📋 Todos los campos disponibles del usuario:`, Object.keys(userData.user));
-      console.log(`📋 Valores de campos relevantes:`, {
-        location: userData.user.location,
-        user_fields: userData.user.user_fields
-      });
+
       
       // Si se encontró ubicación, extraer el país (igual que tu script Python)
       if (location !== 'N/A') {
         const country = extractCountryFromLocation(location);
-        console.log(`🌍 País extraído: ${country} (de: ${location})`);
         location = country;
-      } else {
-        console.log(`❌ No se encontró ubicación para el usuario ${username}`);
       }
       
       // Guardar en cache
       userLocationCache.set(username, location);
-      console.log(`💾 Ubicación guardada en cache para ${username}: ${location}`);
       return location;
     } else {
-      console.log(`❌ Error en la respuesta de la API: ${response.status} ${response.statusText}`);
-      if (response.status === 403) {
-        console.log(`🔒 Error 403: Problema de permisos. Verifica que el campo 'location' esté configurado como público.`);
-      } else if (response.status === 404) {
-        console.log(`🔍 Error 404: Usuario no encontrado.`);
-      }
+      // Error en la respuesta de la API
     }
   } catch (error) {
-    console.log(`❌ Error obteniendo ubicación del usuario ${username}:`, error);
-    console.log(`📋 Stack trace completo:`, error.stack);
+    // Error obteniendo ubicación del usuario
   }
   
   // Si falla, guardar N/A en cache para evitar reintentos
   userLocationCache.set(username, 'N/A');
-  console.log(`💾 N/A guardado en cache para ${username} debido a error`);
   return 'N/A';
 }
 
@@ -307,13 +273,8 @@ async function addLocationColumn() {
       (window.location.search.includes('order=') || window.location.pathname === '/u');
     
     if (!isAdminUsersPage && !isPublicUsersPage) {
-      console.log('📍 No estamos en una página de usuarios (admin o pública)');
       return;
     }
-    
-    console.log(`📍 Detectada vista de usuarios: ${isAdminUsersPage ? 'Administración' : 'Pública'}`);
-    
-    console.log('🔍 Buscando tabla de usuarios...');
     
     // Esperar un poco más para que la página se cargue completamente
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -321,7 +282,6 @@ async function addLocationColumn() {
     // Buscar la tabla usando nuestra función personalizada
     const table = findUsersTable();
     if (!table) {
-      console.log('❌ No se pudo encontrar la tabla de usuarios');
       // Intentar de nuevo en unos segundos
       setTimeout(addLocationColumn, 3000);
       return;
@@ -330,17 +290,13 @@ async function addLocationColumn() {
     // Analizar la estructura de la tabla
     const structure = analyzeTableStructure(table);
     if (!structure) {
-      console.log('❌ No se pudo analizar la estructura de la tabla');
       return;
     }
     
     // Verificar si ya se agregó la columna
     if (table.querySelector('.location-column-header')) {
-      console.log('✅ La columna Location ya está presente');
       return;
     }
-    
-    console.log('📊 Agregando columna Location...');
     
     if (structure.type === 'modern') {
       // Estructura moderna de Discourse (CSS Grid + ARIA)
@@ -356,10 +312,7 @@ async function addLocationColumn() {
     // Aplicar estilos CSS personalizados
     applyLocationColumnStyles();
     
-    console.log('✅ Columna Location agregada exitosamente');
-    
   } catch (error) {
-    console.log('❌ Error agregando columna Location:', error);
     // Intentar de nuevo en unos segundos
     setTimeout(addLocationColumn, 3000);
   }
@@ -367,7 +320,7 @@ async function addLocationColumn() {
 
 // Función para agregar columna a tabla moderna de Discourse
 async function addColumnToModernTable(table, columnHeaders, dataRows) {
-  console.log('🔧 Agregando columna a tabla moderna de Discourse...');
+
   
   // Crear encabezado de columna
   const locationHeader = document.createElement('div');
@@ -402,8 +355,6 @@ async function addColumnToModernTable(table, columnHeaders, dataRows) {
   }
   
   // Agregar celdas de datos
-  console.log(`📝 Agregando celdas para ${dataRows.length} filas...`);
-  
   for (const row of dataRows) {
     await addLocationCellToModernRow(row);
   }
@@ -417,8 +368,6 @@ async function addColumnToModernTable(table, columnHeaders, dataRows) {
 
 // Función para agregar celda de ubicación a una fila moderna
 async function addLocationCellToModernRow(row) {
-  console.log('🔍 Procesando fila:', row);
-  
   const locationCell = document.createElement('div');
   locationCell.className = 'directory-table__cell location-column-data';
   locationCell.setAttribute('role', 'cell');
@@ -427,18 +376,12 @@ async function addLocationCellToModernRow(row) {
   const usernameCell = row.querySelector('.directory-table__cell.username');
   let username = '';
   
-  console.log('🔍 Celda de username encontrada:', usernameCell);
-  
   if (usernameCell) {
-    console.log('🔍 Contenido de la celda username:', usernameCell.innerHTML);
-    
     // Buscar el enlace del username (el segundo enlace con clase ember-view)
     const usernameLink = usernameCell.querySelector('a.ember-view');
-    console.log('🔍 Enlace username encontrado:', usernameLink);
     
     if (usernameLink) {
       username = usernameLink.textContent.trim();
-      console.log('🔍 Username extraído del enlace:', username);
     } else {
       // Intentar otros selectores para la vista pública
       const avatarLink = usernameCell.querySelector('a.avatar');
@@ -446,20 +389,16 @@ async function addLocationCellToModernRow(row) {
         const href = avatarLink.getAttribute('href');
         if (href && href.startsWith('/u/')) {
           username = href.split('/u/')[1];
-          console.log('🔍 Username extraído del avatar link:', username);
         }
       }
       
       if (!username) {
         username = usernameCell.textContent.trim();
-        console.log('🔍 Username extraído del texto:', username);
       }
     }
   } else {
-    console.log('❌ No se encontró celda de username en la fila');
     // Intentar otros selectores para la vista pública
     const allCells = row.querySelectorAll('.directory-table__cell');
-    console.log('🔍 Todas las celdas de la fila:', allCells);
     
     for (const cell of allCells) {
       const links = cell.querySelectorAll('a');
@@ -467,7 +406,6 @@ async function addLocationCellToModernRow(row) {
         const href = link.getAttribute('href');
         if (href && href.startsWith('/u/')) {
           username = href.split('/u/')[1];
-          console.log('🔍 Username encontrado en enlace alternativo:', username);
           break;
         }
       }
