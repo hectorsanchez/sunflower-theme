@@ -215,12 +215,20 @@ async function getUserLocation(username) {
         return 'N/A';
       }
       
-      // Buscar la ubicación en los campos del usuario
-      if (userData.user.user_fields) {
+      // Buscar la ubicación en el campo "location" estándar (que configuraste como público)
+      if (userData.user.location) {
+        location = userData.user.location;
+        console.log(`✅ Ubicación encontrada en campo estándar: ${location}`);
+      } else {
+        console.log(`❌ Campo 'location' estándar no encontrado`);
+      }
+      
+      // Si no se encontró en location estándar, buscar en campos personalizados públicos
+      if (location === 'N/A' && userData.user.user_fields) {
         console.log(`📋 Campos personalizados disponibles:`, Object.keys(userData.user.user_fields));
         console.log(`📋 Valores de campos personalizados:`, userData.user.user_fields);
         
-        // Buscar en campos personalizados (user_fields)
+        // Buscar en campos personalizados (user_fields) que sean públicos
         for (let i = 1; i <= 20; i++) {
           const fieldKey = `user_field_${i}`;
           if (userData.user.user_fields[fieldKey]) {
@@ -241,62 +249,16 @@ async function getUserLocation(username) {
             }
           }
         }
-      } else {
-        console.log(`❌ No se encontraron campos personalizados (user_fields)`);
       }
       
-      // Si no se encontró en user_fields, buscar en otros campos
-      if (location === 'N/A' && userData.user) {
-        console.log(`🔍 Buscando en campos estándar...`);
-        
-        // Buscar en el campo "location" estándar de Discourse
-        if (userData.user.location) {
-          location = userData.user.location;
-          console.log(`✅ Ubicación encontrada en campo estándar: ${location}`);
-        } else {
-          console.log(`❌ Campo 'location' estándar no encontrado`);
-        }
-        
-        // Buscar en el campo "bio" o "about"
-        if (location === 'N/A' && userData.user.bio_excerpt) {
-          console.log(`📝 Campo 'bio_excerpt' encontrado: ${userData.user.bio_excerpt}`);
-          if (userData.user.bio_excerpt.includes('Location:')) {
-            const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
-            if (bioMatch) {
-              location = bioMatch[1].trim();
-              console.log(`✅ Ubicación encontrada en bio: ${location}`);
-            }
-          }
-        } else {
-          console.log(`❌ Campo 'bio_excerpt' no encontrado`);
-        }
-        
-        // Buscar en el campo "about" completo
-        if (location === 'N/A' && userData.user.about) {
-          console.log(`📝 Campo 'about' encontrado: ${userData.user.about}`);
-          const aboutText = userData.user.about.toLowerCase();
-          if (aboutText.includes('location:') || aboutText.includes('ubicación:')) {
-            const aboutMatch = userData.user.about.match(/(?:location|ubicación):\s*([^\n]+)/i);
-            if (aboutMatch) {
-              location = aboutMatch[1].trim();
-              console.log(`✅ Ubicación encontrada en about: ${location}`);
-            }
-          }
-        } else {
-          console.log(`❌ Campo 'about' no encontrado`);
-        }
-        
-        // Mostrar todos los campos disponibles del usuario para debugging
-        console.log(`📋 Todos los campos disponibles del usuario:`, Object.keys(userData.user));
-        console.log(`📋 Valores de campos relevantes:`, {
-          location: userData.user.location,
-          bio_excerpt: userData.user.bio_excerpt,
-          about: userData.user.about,
-          user_fields: userData.user.user_fields
-        });
-      }
+      // Mostrar todos los campos disponibles del usuario para debugging
+      console.log(`📋 Todos los campos disponibles del usuario:`, Object.keys(userData.user));
+      console.log(`📋 Valores de campos relevantes:`, {
+        location: userData.user.location,
+        user_fields: userData.user.user_fields
+      });
       
-      // Si se encontró ubicación, extraer el país
+      // Si se encontró ubicación, extraer el país (igual que tu script Python)
       if (location !== 'N/A') {
         const country = extractCountryFromLocation(location);
         console.log(`🌍 País extraído: ${country} (de: ${location})`);
@@ -312,7 +274,7 @@ async function getUserLocation(username) {
     } else {
       console.log(`❌ Error en la respuesta de la API: ${response.status} ${response.statusText}`);
       if (response.status === 403) {
-        console.log(`🔒 Error 403: Posible problema de permisos. Verifica que tengas acceso a la API.`);
+        console.log(`🔒 Error 403: Problema de permisos. Verifica que el campo 'location' esté configurado como público.`);
       } else if (response.status === 404) {
         console.log(`🔍 Error 404: Usuario no encontrado.`);
       }
