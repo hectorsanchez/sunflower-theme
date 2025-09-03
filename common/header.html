@@ -413,6 +413,9 @@ async function addColumnToModernTable(table, columnHeaders, dataRows) {
   
   // Actualizar el CSS Grid para incluir la nueva columna
   updateGridColumns(table);
+  
+  // Agregar filtro por ubicación
+  await addLocationFilter(table, dataRows);
 }
 
 // Función para agregar celda de ubicación a una fila moderna
@@ -475,6 +478,142 @@ function updateGridColumns(table) {
     table.style.gridTemplateColumns = newStyle;
     console.log('🔧 CSS Grid actualizado para incluir la nueva columna');
   }
+}
+
+// Función para agregar filtro por ubicación
+async function addLocationFilter(table, dataRows) {
+  console.log('🔍 Agregando filtro por ubicación...');
+  
+  // Esperar a que todas las ubicaciones se carguen
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // Recopilar todas las ubicaciones únicas
+  const locations = new Set();
+  const locationCells = table.querySelectorAll('.location-column-data');
+  
+  locationCells.forEach(cell => {
+    const location = cell.textContent.trim();
+    if (location && location !== 'Cargando...') {
+      locations.add(location);
+    }
+  });
+  
+  console.log(`📍 Ubicaciones encontradas:`, Array.from(locations));
+  
+  // Crear el contenedor del filtro
+  const filterContainer = document.createElement('div');
+  filterContainer.className = 'location-filter-container';
+  filterContainer.style.cssText = `
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #faf0ca;
+    border: 1px solid #eadac9;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  `;
+  
+  // Crear etiqueta
+  const label = document.createElement('label');
+  label.textContent = 'Filtrar por ubicación:';
+  label.style.cssText = `
+    font-weight: 600;
+    color: #40312a;
+    margin-right: 5px;
+  `;
+  
+  // Crear dropdown
+  const select = document.createElement('select');
+  select.className = 'location-filter-select';
+  select.style.cssText = `
+    padding: 5px 10px;
+    border: 1px solid #e0c052;
+    border-radius: 4px;
+    background-color: #ffffff;
+    color: #40312a;
+    font-size: 14px;
+    min-width: 150px;
+  `;
+  
+  // Agregar opciones
+  const allOption = document.createElement('option');
+  allOption.value = 'all';
+  allOption.textContent = 'Todos los usuarios';
+  select.appendChild(allOption);
+  
+  const noLocationOption = document.createElement('option');
+  noLocationOption.value = 'no-location';
+  noLocationOption.textContent = 'Sin ubicación';
+  select.appendChild(noLocationOption);
+  
+  // Agregar opciones de ubicaciones
+  const sortedLocations = Array.from(locations).sort();
+  sortedLocations.forEach(location => {
+    const option = document.createElement('option');
+    option.value = location;
+    option.textContent = location;
+    select.appendChild(option);
+  });
+  
+  // Crear contador
+  const counter = document.createElement('span');
+  counter.className = 'location-filter-counter';
+  counter.style.cssText = `
+    color: #8A4A19;
+    font-weight: 500;
+    font-size: 14px;
+  `;
+  
+  // Función para actualizar el contador
+  function updateCounter() {
+    const visibleRows = table.querySelectorAll('.directory-table__row:not([style*="display: none"])');
+    const totalRows = dataRows.length;
+    counter.textContent = `${visibleRows.length} de ${totalRows} usuarios`;
+  }
+  
+  // Función para filtrar
+  function filterByLocation(selectedLocation) {
+    console.log(`🔍 Filtrando por ubicación: ${selectedLocation}`);
+    
+    dataRows.forEach(row => {
+      const locationCell = row.querySelector('.location-column-data');
+      if (locationCell) {
+        const cellLocation = locationCell.textContent.trim();
+        
+        if (selectedLocation === 'all') {
+          row.style.display = '';
+        } else if (selectedLocation === 'no-location') {
+          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Cargando...') ? '' : 'none';
+        } else {
+          row.style.display = (cellLocation === selectedLocation) ? '' : 'none';
+        }
+      }
+    });
+    
+    updateCounter();
+  }
+  
+  // Event listener para el filtro
+  select.addEventListener('change', (e) => {
+    filterByLocation(e.target.value);
+  });
+  
+  // Ensamblar el filtro
+  filterContainer.appendChild(label);
+  filterContainer.appendChild(select);
+  filterContainer.appendChild(counter);
+  
+  // Insertar el filtro antes de la tabla
+  const tableContainer = table.closest('.directory-table-container') || table.parentNode;
+  if (tableContainer) {
+    tableContainer.insertBefore(filterContainer, table);
+  }
+  
+  // Actualizar contador inicial
+  updateCounter();
+  
+  console.log('✅ Filtro por ubicación agregado exitosamente');
 }
 
 // Función para agregar columna a tabla tradicional
@@ -633,6 +772,50 @@ function applyLocationColumnStyles() {
       transform: scale(1.02) !important;
     }
     
+    /* Estilos para el filtro por ubicación */
+    .location-filter-container {
+      margin: 10px 0 !important;
+      padding: 10px !important;
+      background-color: #faf0ca !important;
+      border: 1px solid #eadac9 !important;
+      border-radius: 4px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+    }
+    
+    .location-filter-container label {
+      font-weight: 600 !important;
+      color: #40312a !important;
+      margin-right: 5px !important;
+    }
+    
+    .location-filter-select {
+      padding: 5px 10px !important;
+      border: 1px solid #e0c052 !important;
+      border-radius: 4px !important;
+      background-color: #ffffff !important;
+      color: #40312a !important;
+      font-size: 14px !important;
+      min-width: 150px !important;
+    }
+    
+    .location-filter-select:hover {
+      border-color: #d4b847 !important;
+    }
+    
+    .location-filter-select:focus {
+      outline: none !important;
+      border-color: #8A4A19 !important;
+      box-shadow: 0 0 0 2px rgba(138, 74, 25, 0.2) !important;
+    }
+    
+    .location-filter-counter {
+      color: #8A4A19 !important;
+      font-weight: 500 !important;
+      font-size: 14px !important;
+    }
+    
     /* Estilos para la tabla completa */
     .admin-users-table table,
     .admin-users table,
@@ -664,10 +847,12 @@ function cleanupLocationColumn() {
   const existingHeader = document.querySelector('.location-column-header');
   const existingCells = document.querySelectorAll('.location-column-data');
   const existingStyle = document.querySelector('style[data-location-column]');
+  const existingFilter = document.querySelector('.location-filter-container');
   
   if (existingHeader) existingHeader.remove();
   existingCells.forEach(cell => cell.remove());
   if (existingStyle) existingStyle.remove();
+  if (existingFilter) existingFilter.remove();
 }
 
 // Función principal que se ejecuta cuando Discourse esté listo
