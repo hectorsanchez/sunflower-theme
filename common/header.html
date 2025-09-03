@@ -178,8 +178,13 @@ async function getUserLocation(username) {
   }
   
   try {
+    console.log(`🔍 Iniciando búsqueda de ubicación para usuario: ${username}`);
+    
     // Hacer una llamada a la API de Discourse para obtener el perfil del usuario
-    const response = await fetch(`/u/${username}.json`, {
+    const apiUrl = `/u/${username}.json`;
+    console.log(`📡 Llamando a API: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -187,15 +192,33 @@ async function getUserLocation(username) {
       }
     });
     
+    console.log(`📡 Respuesta de API recibida:`, {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      url: response.url
+    });
+    
     if (response.ok) {
       const userData = await response.json();
+      console.log(`📊 Datos completos del usuario ${username}:`, userData);
+      
       let location = 'N/A';
       
       console.log(`🔍 Analizando datos de usuario: ${username}`);
       
+      // Verificar si tenemos datos del usuario
+      if (!userData.user) {
+        console.log(`❌ No se encontró objeto 'user' en la respuesta`);
+        console.log(`📋 Estructura de la respuesta:`, Object.keys(userData));
+        userLocationCache.set(username, 'N/A');
+        return 'N/A';
+      }
+      
       // Buscar la ubicación en los campos del usuario
-      if (userData.user && userData.user.user_fields) {
+      if (userData.user.user_fields) {
         console.log(`📋 Campos personalizados disponibles:`, Object.keys(userData.user.user_fields));
+        console.log(`📋 Valores de campos personalizados:`, userData.user.user_fields);
         
         // Buscar en campos personalizados (user_fields)
         for (let i = 1; i <= 20; i++) {
@@ -218,25 +241,39 @@ async function getUserLocation(username) {
             }
           }
         }
+      } else {
+        console.log(`❌ No se encontraron campos personalizados (user_fields)`);
       }
       
       // Si no se encontró en user_fields, buscar en otros campos
       if (location === 'N/A' && userData.user) {
+        console.log(`🔍 Buscando en campos estándar...`);
+        
         // Buscar en el campo "location" estándar de Discourse
         if (userData.user.location) {
           location = userData.user.location;
           console.log(`✅ Ubicación encontrada en campo estándar: ${location}`);
+        } else {
+          console.log(`❌ Campo 'location' estándar no encontrado`);
         }
+        
         // Buscar en el campo "bio" o "about"
-        else if (userData.user.bio_excerpt && userData.user.bio_excerpt.includes('Location:')) {
-          const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
-          if (bioMatch) {
-            location = bioMatch[1].trim();
-            console.log(`✅ Ubicación encontrada en bio: ${location}`);
+        if (location === 'N/A' && userData.user.bio_excerpt) {
+          console.log(`📝 Campo 'bio_excerpt' encontrado: ${userData.user.bio_excerpt}`);
+          if (userData.user.bio_excerpt.includes('Location:')) {
+            const bioMatch = userData.user.bio_excerpt.match(/Location:\s*([^\n]+)/i);
+            if (bioMatch) {
+              location = bioMatch[1].trim();
+              console.log(`✅ Ubicación encontrada en bio: ${location}`);
+            }
           }
+        } else {
+          console.log(`❌ Campo 'bio_excerpt' no encontrado`);
         }
+        
         // Buscar en el campo "about" completo
-        else if (userData.user.about) {
+        if (location === 'N/A' && userData.user.about) {
+          console.log(`📝 Campo 'about' encontrado: ${userData.user.about}`);
           const aboutText = userData.user.about.toLowerCase();
           if (aboutText.includes('location:') || aboutText.includes('ubicación:')) {
             const aboutMatch = userData.user.about.match(/(?:location|ubicación):\s*([^\n]+)/i);
@@ -245,7 +282,18 @@ async function getUserLocation(username) {
               console.log(`✅ Ubicación encontrada en about: ${location}`);
             }
           }
+        } else {
+          console.log(`❌ Campo 'about' no encontrado`);
         }
+        
+        // Mostrar todos los campos disponibles del usuario para debugging
+        console.log(`📋 Todos los campos disponibles del usuario:`, Object.keys(userData.user));
+        console.log(`📋 Valores de campos relevantes:`, {
+          location: userData.user.location,
+          bio_excerpt: userData.user.bio_excerpt,
+          about: userData.user.about,
+          user_fields: userData.user.user_fields
+        });
       }
       
       // Si se encontró ubicación, extraer el país
@@ -253,18 +301,30 @@ async function getUserLocation(username) {
         const country = extractCountryFromLocation(location);
         console.log(`🌍 País extraído: ${country} (de: ${location})`);
         location = country;
+      } else {
+        console.log(`❌ No se encontró ubicación para el usuario ${username}`);
       }
       
       // Guardar en cache
       userLocationCache.set(username, location);
+      console.log(`💾 Ubicación guardada en cache para ${username}: ${location}`);
       return location;
+    } else {
+      console.log(`❌ Error en la respuesta de la API: ${response.status} ${response.statusText}`);
+      if (response.status === 403) {
+        console.log(`🔒 Error 403: Posible problema de permisos. Verifica que tengas acceso a la API.`);
+      } else if (response.status === 404) {
+        console.log(`🔍 Error 404: Usuario no encontrado.`);
+      }
     }
   } catch (error) {
     console.log(`❌ Error obteniendo ubicación del usuario ${username}:`, error);
+    console.log(`📋 Stack trace completo:`, error.stack);
   }
   
   // Si falla, guardar N/A en cache para evitar reintentos
   userLocationCache.set(username, 'N/A');
+  console.log(`💾 N/A guardado en cache para ${username} debido a error`);
   return 'N/A';
 }
 
