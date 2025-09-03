@@ -48,12 +48,13 @@ function waitForElement(selector, timeout = 10000) {
   });
 }
 
-// Función para encontrar la tabla de usuarios de administración
-function findAdminUsersTable() {
+// Función para encontrar la tabla de usuarios (admin o pública)
+function findUsersTable() {
   // Intentar diferentes selectores para encontrar la tabla
   const selectors = [
     '.directory-table.users-list',
     '.directory-table[role="table"]',
+    '.directory-table', // Para vista pública
     '.users-list',
     '.admin-users-list',
     '.admin-users table',
@@ -310,11 +311,16 @@ function extractCountryFromLocation(location) {
 // Función para agregar la columna Location
 async function addLocationColumn() {
   try {
-    // Verificar si estamos en la página de administración de usuarios
-    if (!window.location.pathname.includes('/admin/users/list/')) {
-      console.log('📍 No estamos en la página de administración de usuarios');
+    // Verificar si estamos en una página de usuarios (admin o pública)
+    const isAdminUsersPage = window.location.pathname.includes('/admin/users/list/');
+    const isPublicUsersPage = window.location.pathname.includes('/u') && window.location.search.includes('order=');
+    
+    if (!isAdminUsersPage && !isPublicUsersPage) {
+      console.log('📍 No estamos en una página de usuarios (admin o pública)');
       return;
     }
+    
+    console.log(`📍 Detectada vista de usuarios: ${isAdminUsersPage ? 'Administración' : 'Pública'}`);
     
     console.log('🔍 Buscando tabla de usuarios...');
     
@@ -322,7 +328,7 @@ async function addLocationColumn() {
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Buscar la tabla usando nuestra función personalizada
-    const table = findAdminUsersTable();
+    const table = findUsersTable();
     if (!table) {
       console.log('❌ No se pudo encontrar la tabla de usuarios');
       // Intentar de nuevo en unos segundos
@@ -888,20 +894,26 @@ async function initLocationColumn() {
     // También ejecutar cuando se hace clic en enlaces de navegación
     document.addEventListener('click', function(event) {
       const target = event.target.closest('a');
-      if (target && target.href && target.href.includes('/admin/users/list/')) {
-        setTimeout(() => {
-          cleanupLocationColumn();
-          addLocationColumn();
-        }, 1000);
+      if (target && target.href) {
+        const href = target.href;
+        const isAdminUsersLink = href.includes('/admin/users/list/');
+        const isPublicUsersLink = href.includes('/u') && href.includes('order=');
+        
+        if (isAdminUsersLink || isPublicUsersLink) {
+          setTimeout(() => {
+            cleanupLocationColumn();
+            addLocationColumn();
+          }, 1000);
+        }
       }
     });
     
-    // Ejecutar cuando se cambia entre pestañas (Active, New, Staff, etc.)
+    // Ejecutar cuando se cambia entre pestañas (Active, New, Staff, etc.) o ordenamientos públicos
     document.addEventListener('click', function(event) {
       const target = event.target.closest('a');
       if (target && target.classList.contains('ember-view')) {
         const href = target.getAttribute('href');
-        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups'))) {
+        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups') || (href.includes('/u') && href.includes('order=')))) {
           setTimeout(() => {
             cleanupLocationColumn();
             addLocationColumn();
