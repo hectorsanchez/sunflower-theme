@@ -312,9 +312,6 @@ async function addLocationColumn() {
     // Aplicar estilos CSS personalizados
     applyLocationColumnStyles();
     
-    // Aplicar estilos CSS del footer
-    applyFooterStyles();
-    
   } catch (error) {
     // Intentar de nuevo en unos segundos
     setTimeout(addLocationColumn, 3000);
@@ -1037,6 +1034,9 @@ async function initLocationColumn() {
     console.log('❌ Error inicializando columna Location:', error);
   }
 }
+
+// Aplicar estilos del footer inmediatamente al cargar la página
+applyFooterStyles();
 
 // Iniciar cuando el DOM esté listo
 if (document.readyState === 'loading') {
