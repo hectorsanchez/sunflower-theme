@@ -422,12 +422,12 @@ async function addLocationCellToModernRow(row) {
   locationCell.setAttribute('role', 'cell');
   
   // Obtener el username de la fila
-  const usernameCell = row.querySelector('.directory-table__cell--username, [data-username]');
+  const usernameCell = row.querySelector('.directory-table__cell.username');
   let username = '';
   
   if (usernameCell) {
-    // Buscar el enlace del username
-    const usernameLink = usernameCell.querySelector('a');
+    // Buscar el enlace del username (el segundo enlace con clase ember-view)
+    const usernameLink = usernameCell.querySelector('a.ember-view');
     if (usernameLink) {
       username = usernameLink.textContent.trim();
     } else {
