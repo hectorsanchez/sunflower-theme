@@ -312,6 +312,9 @@ async function addLocationColumn() {
     // Aplicar estilos CSS personalizados
     applyLocationColumnStyles();
     
+    // Cargar CSS del footer
+    loadFooterCSS();
+    
   } catch (error) {
     // Intentar de nuevo en unos segundos
     setTimeout(addLocationColumn, 3000);
@@ -685,6 +688,15 @@ async function addLocationCellToRow(row) {
   } else {
     row.appendChild(locationCell);
   }
+}
+
+// Función para cargar CSS del footer
+function loadFooterCSS() {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/theme-javascripts/sunflower-theme/common/footer.css';
+  link.setAttribute('data-footer-css', 'true');
+  document.head.appendChild(link);
 }
 
 // Función para aplicar estilos CSS

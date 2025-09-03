@@ -29,7 +29,8 @@
   },
 
   "common": {
-    "header_html": "common/header.html"
+    "header_html": "common/header.html",
+    "footer_html": "common/footer.html"
   },
 
   "learn_more": "https://meta.discourse.org/t/beginners-guide-to-using-discourse-themes/91966"

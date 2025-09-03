@@ -1,0 +1,160 @@
+/* Estilos para el footer personalizado de Youth Care Assembly */
+
+.yc-footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 15px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+}
+
+.yc-footer-divider {
+  border: none;
+  height: 1px;
+  background-color: #dee2e6;
+  margin: 0 0 30px 0;
+}
+
+.yc-footer-row {
+  margin-bottom: 20px;
+}
+
+.yc-footer-logos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.yc-footer-logo {
+  display: inline-block;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  text-decoration: none;
+}
+
+.yc-footer-logo:hover {
+  transform: scale(1.05);
+  opacity: 0.8;
+}
+
+.yc-footer-logo img {
+  max-height: 60px;
+  max-width: 120px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: grayscale(20%);
+  transition: filter 0.3s ease;
+}
+
+.yc-footer-logo:hover img {
+  filter: grayscale(0%);
+}
+
+/* Fila de información de la UE */
+.yc-footer-eu-row {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #dee2e6;
+}
+
+.yc-footer-eu-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.yc-footer-eu-logo {
+  flex-shrink: 0;
+}
+
+.yc-footer-eu-logo img {
+  max-height: 80px;
+  max-width: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.yc-footer-eu-text {
+  flex: 1;
+  min-width: 300px;
+  max-width: 600px;
+}
+
+.yc-footer-eu-text p {
+  font-size: 10pt;
+  font-family: Arial, sans-serif;
+  color: #6c757d;
+  line-height: 1.4;
+  margin: 0;
+  text-align: center;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .yc-footer-container {
+    padding: 15px 10px;
+  }
+  
+  .yc-footer-logos {
+    gap: 15px;
+  }
+  
+  .yc-footer-logo img {
+    max-height: 50px;
+    max-width: 100px;
+  }
+  
+  .yc-footer-eu-content {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+  
+  .yc-footer-eu-text {
+    min-width: auto;
+    max-width: none;
+  }
+  
+  .yc-footer-eu-text p {
+    font-size: 9pt;
+  }
+}
+
+@media (max-width: 480px) {
+  .yc-footer-logos {
+    gap: 10px;
+  }
+  
+  .yc-footer-logo img {
+    max-height: 40px;
+    max-width: 80px;
+  }
+  
+  .yc-footer-eu-logo img {
+    max-height: 60px;
+    max-width: 150px;
+  }
+}
+
+/* Integración con el tema Sunflower */
+.discourse .yc-footer-container {
+  background-color: #faf0ca;
+  border-top: 1px solid #eadac9;
+}
+
+.discourse .yc-footer-divider {
+  background-color: #e0c052;
+}
+
+.discourse .yc-footer-eu-row {
+  border-top: 1px solid #e0c052;
+}
+
+.discourse .yc-footer-eu-text p {
+  color: #8A4A19;
+}
