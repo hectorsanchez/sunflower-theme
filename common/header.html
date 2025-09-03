@@ -426,6 +426,8 @@ async function addColumnToModernTable(table, columnHeaders, dataRows) {
 
 // Función para agregar celda de ubicación a una fila moderna
 async function addLocationCellToModernRow(row) {
+  console.log('🔍 Procesando fila:', row);
+  
   const locationCell = document.createElement('div');
   locationCell.className = 'directory-table__cell location-column-data';
   locationCell.setAttribute('role', 'cell');
@@ -434,13 +436,51 @@ async function addLocationCellToModernRow(row) {
   const usernameCell = row.querySelector('.directory-table__cell.username');
   let username = '';
   
+  console.log('🔍 Celda de username encontrada:', usernameCell);
+  
   if (usernameCell) {
+    console.log('🔍 Contenido de la celda username:', usernameCell.innerHTML);
+    
     // Buscar el enlace del username (el segundo enlace con clase ember-view)
     const usernameLink = usernameCell.querySelector('a.ember-view');
+    console.log('🔍 Enlace username encontrado:', usernameLink);
+    
     if (usernameLink) {
       username = usernameLink.textContent.trim();
+      console.log('🔍 Username extraído del enlace:', username);
     } else {
-      username = usernameCell.textContent.trim();
+      // Intentar otros selectores para la vista pública
+      const avatarLink = usernameCell.querySelector('a.avatar');
+      if (avatarLink) {
+        const href = avatarLink.getAttribute('href');
+        if (href && href.startsWith('/u/')) {
+          username = href.split('/u/')[1];
+          console.log('🔍 Username extraído del avatar link:', username);
+        }
+      }
+      
+      if (!username) {
+        username = usernameCell.textContent.trim();
+        console.log('🔍 Username extraído del texto:', username);
+      }
+    }
+  } else {
+    console.log('❌ No se encontró celda de username en la fila');
+    // Intentar otros selectores para la vista pública
+    const allCells = row.querySelectorAll('.directory-table__cell');
+    console.log('🔍 Todas las celdas de la fila:', allCells);
+    
+    for (const cell of allCells) {
+      const links = cell.querySelectorAll('a');
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        if (href && href.startsWith('/u/')) {
+          username = href.split('/u/')[1];
+          console.log('🔍 Username encontrado en enlace alternativo:', username);
+          break;
+        }
+      }
+      if (username) break;
     }
   }
   
