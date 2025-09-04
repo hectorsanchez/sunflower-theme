@@ -860,3 +860,14 @@ div.ac-wrap {
 :root {
     --d-sidebar-active-background: #f1b643;
 }
+
+// --------------------------------------------------
+// CUSTOM BANNER OVERRIDE
+// --------------------------------------------------
+// Sobrescribir la imagen del banner personalizado con la imagen del tema
+.custom-banner-wrapper {
+    background-image: url('/theme-javascripts/sunflower-theme/common/blobs-banner.svg') !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center center !important;
+}
