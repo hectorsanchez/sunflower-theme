@@ -390,7 +390,7 @@ textarea:focus {
 
 .d-header {
     box-shadow: none;
-    background-color: #e6d5e0;
+    background-color: #f7f0f5;
     height: 70px;
 }
 
@@ -852,4 +852,11 @@ div.ac-wrap {
         }
     }
 
+}
+
+// --------------------------------------------------
+// SIDEBAR ACTIVE BACKGROUND
+// --------------------------------------------------
+:root {
+    --d-sidebar-active-background: #f1b643;
 }
