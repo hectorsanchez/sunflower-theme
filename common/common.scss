@@ -116,7 +116,7 @@ a {
 .btn-text,
 .btn-default,
 .btn-large {
-    background-color: $colour-brown-06;
+    background-color: #f1b643;
     color: $colour-brown-01;
 
     .d-icon {
@@ -614,7 +614,7 @@ img {
 
 //topic list list-control 
 .list-controls .combo-box .combo-box-header {
-    background-color: $colour-brown-03;
+    background-color: #f1b643;
     border: 0;
     border-radius: $radius-2;
     color: $colour-brown-01;
@@ -871,3 +871,13 @@ div.ac-wrap {
     background-repeat: no-repeat !important;
     background-position: center center !important;
 }
+
+// Estilo para el icono del toggle del sidebar
+.header-sidebar-toggle button .d-icon {
+    width: 100%;
+    font-size: var(--font-up-4);
+    line-height: var(--line-height-large);
+    display: inline-block;
+    color: rgb(164, 85, 128);
+}
+
