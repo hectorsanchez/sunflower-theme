@@ -17,6 +17,46 @@
 
 
 // --------------------------------------------------
+// DARK MODE VARIABLES
+// --------------------------------------------------
+
+:root {
+  // Light mode (valores actuales del tema)
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f0f5;
+  --bg-tertiary: #faf0ca;
+  --bg-quaternary: #FCF9F7;
+  --text-primary: #40312a;
+  --text-secondary: #8A4A19;
+  --text-tertiary: #333333;
+  --border-primary: #eadac9;
+  --border-secondary: #e0c052;
+  --accent-primary: #f1b643;
+  --accent-secondary: rgb(164, 85, 128);
+  --accent-tertiary: #F4D35E;
+  --accent-quaternary: #F0C052;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    // Dark mode - colores apagados y suaves
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3a3a3a;
+    --bg-quaternary: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --text-tertiary: #c0c0c0;
+    --border-primary: #4a4a4a;
+    --border-secondary: #5a5a5a;
+    --accent-primary: #d4a843; // Versión más apagada del amarillo
+    --accent-secondary: rgb(180, 120, 160); // Versión más apagada del púrpura
+    --accent-tertiary: #c4b35e; // Versión más apagada
+    --accent-quaternary: #b0a052; // Versión más apagada
+  }
+}
+
+// --------------------------------------------------
 // TYPOGRAPHY
 // --------------------------------------------------
 
@@ -48,8 +88,8 @@ $base-font-family: 'Rubik', sans-serif;
 
 html {
     font-family: $base-font-family;
-    color: $colour-black;
-    background: $colour-white;
+    color: var(--text-primary);
+    background: var(--bg-primary);
 }
 
 pre {
@@ -58,14 +98,14 @@ pre {
 }
 
 a {
-    color: $colour-brown-02;
+    color: var(--text-secondary);
 
     &:visited {
-        color: $colour-brown-02;
+        color: var(--text-secondary);
     }
 
     &:hover {
-        color: $colour-black;
+        color: var(--text-primary);
     }
 }
 
@@ -116,11 +156,11 @@ a {
 .btn-text,
 .btn-default,
 .btn-large {
-    background-color: #f1b643;
-    color: $colour-brown-01;
+    background-color: var(--accent-primary);
+    color: var(--text-primary);
 
     .d-icon {
-        color: $colour-brown-01;
+        color: var(--text-primary);
     }
 }
 
@@ -390,7 +430,7 @@ textarea:focus {
 
 .d-header {
     box-shadow: none;
-    background-color: #f7f0f5;
+    background-color: var(--bg-secondary);
     height: 70px;
 }
 
@@ -614,10 +654,10 @@ img {
 
 //topic list list-control 
 .list-controls .combo-box .combo-box-header {
-    background-color: #f1b643;
+    background-color: var(--accent-primary);
     border: 0;
     border-radius: $radius-2;
-    color: $colour-brown-01;
+    color: var(--text-primary);
     font-weight: 400;
 }
 
@@ -858,7 +898,7 @@ div.ac-wrap {
 // SIDEBAR ACTIVE BACKGROUND
 // --------------------------------------------------
 :root {
-    --d-sidebar-active-background: #f1b643;
+    --d-sidebar-active-background: var(--accent-primary);
 }
 
 // --------------------------------------------------
@@ -878,6 +918,6 @@ div.ac-wrap {
     font-size: var(--font-up-4);
     line-height: var(--line-height-large);
     display: inline-block;
-    color: rgb(164, 85, 128);
+    color: var(--accent-secondary);
 }
 

@@ -481,8 +481,8 @@ async function addLocationFilter(table, dataRows) {
   filterContainer.style.cssText = `
     margin: 10px 0;
     padding: 10px;
-    background-color: #faf0ca;
-    border: 1px solid #eadac9;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -494,7 +494,7 @@ async function addLocationFilter(table, dataRows) {
   label.textContent = 'Filter by Location:';
   label.style.cssText = `
     font-weight: 600;
-    color: #40312a;
+    color: var(--text-primary);
     margin-right: 5px;
   `;
   
@@ -505,8 +505,8 @@ async function addLocationFilter(table, dataRows) {
     padding: 5px 10px;
     border: 1px solid #e0c052;
     border-radius: 4px;
-    background-color: #ffffff;
-    color: #40312a;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-size: 14px;
     min-width: 150px;
   `;
@@ -535,7 +535,7 @@ async function addLocationFilter(table, dataRows) {
   const counter = document.createElement('span');
   counter.className = 'location-filter-counter';
   counter.style.cssText = `
-    color: #8A4A19;
+    color: var(--text-secondary);
     font-weight: 500;
     font-size: 14px;
   `;
@@ -702,7 +702,7 @@ function applyFooterStyles() {
     .yc-footer-divider {
       border: none;
       height: 1px;
-      background-color: #e0c052;
+      background-color: var(--border-secondary);
       margin: 0 0 30px 0;
     }
 
@@ -778,7 +778,7 @@ function applyFooterStyles() {
     .yc-footer-eu-text p {
       font-size: 10pt;
       font-family: Arial, sans-serif;
-      color: #8A4A19;
+      color: var(--text-secondary);
       line-height: 1.4;
       margin: 0;
       text-align: center;
@@ -840,7 +840,7 @@ function applyLocationColumnStyles() {
   style.setAttribute('data-location-column', 'true');
   style.textContent = `
     .location-column-header {
-      color: #40312a !important;
+      color: var(--text-primary) !important;
       font-weight: 600 !important;
       padding: 8px 12px !important;
       text-align: center !important;
@@ -848,7 +848,7 @@ function applyLocationColumnStyles() {
     }
     
     .location-column-data {
-      color: #40312a !important;
+      color: var(--text-primary) !important;
       font-size: 0.9em !important;
       padding: 8px 12px !important;
       text-align: center !important;
@@ -857,12 +857,12 @@ function applyLocationColumnStyles() {
     }
     
     .location-column-data:hover {
-      color: #212121 !important;
+      color: var(--text-primary) !important;
     }
     
     /* Estilos para tablas modernas de Discourse */
     .directory-table .location-column-header {
-      color: #40312a !important;
+      color: var(--text-primary) !important;
       font-weight: 600 !important;
       padding: 8px 12px !important;
       text-align: center !important;
@@ -870,7 +870,7 @@ function applyLocationColumnStyles() {
     }
     
     .directory-table .location-column-data {
-      color: #40312a !important;
+      color: var(--text-primary) !important;
       font-size: 0.9em !important;
       padding: 8px 12px !important;
       text-align: center !important;
@@ -879,15 +879,15 @@ function applyLocationColumnStyles() {
     }
     
     .directory-table .location-column-data:hover {
-      color: #212121 !important;
+      color: var(--text-primary) !important;
     }
     
     /* Estilos para el filtro por ubicación */
     .location-filter-container {
       margin: 10px 0 !important;
       padding: 10px !important;
-      background-color: #faf0ca !important;
-      border: 1px solid #eadac9 !important;
+      background-color: var(--bg-tertiary) !important;
+      border: 1px solid var(--border-primary) !important;
       border-radius: 4px !important;
       display: flex !important;
       align-items: center !important;
@@ -896,7 +896,7 @@ function applyLocationColumnStyles() {
     
     .location-filter-container label {
       font-weight: 600 !important;
-      color: #40312a !important;
+      color: var(--text-primary) !important;
       margin-right: 5px !important;
     }
     
@@ -904,8 +904,8 @@ function applyLocationColumnStyles() {
       padding: 5px 10px !important;
       border: 1px solid #e0c052 !important;
       border-radius: 4px !important;
-      background-color: #ffffff !important;
-      color: #40312a !important;
+      background-color: var(--bg-primary) !important;
+      color: var(--text-primary) !important;
       font-size: 14px !important;
       min-width: 150px !important;
     }
@@ -916,12 +916,12 @@ function applyLocationColumnStyles() {
     
     .location-filter-select:focus {
       outline: none !important;
-      border-color: #8A4A19 !important;
+      border-color: var(--text-secondary) !important;
       box-shadow: 0 0 0 2px rgba(138, 74, 25, 0.2) !important;
     }
     
     .location-filter-counter {
-      color: #8A4A19 !important;
+      color: var(--text-secondary) !important;
       font-weight: 500 !important;
       font-size: 14px !important;
     }
