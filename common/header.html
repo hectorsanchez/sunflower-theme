@@ -159,22 +159,117 @@ function addEventListenerSafe(element, event, handler) {
   }
 }
 
-// Cache para almacenar las ubicaciones de los usuarios
+// Cache para almacenar las ubicaciones de los usuarios (persistente)
 const userLocationCache = new Map();
 
-// Función para obtener la ubicación de un usuario desde la API
+// Configuración de rate limiting
+const RATE_LIMIT_CONFIG = {
+  maxConcurrent: 3,        // Máximo 3 llamadas simultáneas
+  delayBetweenBatches: 1000, // 1 segundo entre lotes
+  batchSize: 5,            // Procesar 5 usuarios por lote
+  maxRetries: 3,           // Máximo 3 reintentos
+  retryDelay: 2000         // 2 segundos base para retry
+};
+
+// Cola de usuarios pendientes de procesar
+const pendingUsersQueue = [];
+let activeRequests = 0;
+
+// Cargar cache desde localStorage al iniciar
+function loadCacheFromStorage() {
+  try {
+    const stored = localStorage.getItem('userLocationCache');
+    if (stored) {
+      const cacheData = JSON.parse(stored);
+      Object.entries(cacheData).forEach(([key, value]) => {
+        userLocationCache.set(key, value);
+      });
+      console.log(`📦 Cache cargado: ${userLocationCache.size} ubicaciones`);
+    }
+  } catch (error) {
+    console.log('⚠️ Error cargando cache desde localStorage:', error);
+  }
+}
+
+// Guardar cache en localStorage
+function saveCacheToStorage() {
+  try {
+    const cacheData = Object.fromEntries(userLocationCache);
+    localStorage.setItem('userLocationCache', JSON.stringify(cacheData));
+  } catch (error) {
+    console.log('⚠️ Error guardando cache en localStorage:', error);
+  }
+}
+
+// Función para obtener la ubicación de un usuario desde la API con rate limiting
 async function getUserLocation(username) {
+  // Verificar cache primero
   if (userLocationCache.has(username)) {
     return userLocationCache.get(username);
   }
   
+  // Si ya está en la cola, esperar
+  if (pendingUsersQueue.some(item => item.username === username)) {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (userLocationCache.has(username)) {
+          clearInterval(checkInterval);
+          resolve(userLocationCache.get(username));
+        }
+      }, 100);
+    });
+  }
+  
+  // Agregar a la cola
+  return new Promise((resolve) => {
+    pendingUsersQueue.push({ username, resolve });
+    processUserQueue();
+  });
+}
+
+// Función para procesar la cola de usuarios con rate limiting
+async function processUserQueue() {
+  if (activeRequests >= RATE_LIMIT_CONFIG.maxConcurrent || pendingUsersQueue.length === 0) {
+    return;
+  }
+  
+  // Tomar un lote de usuarios
+  const batch = pendingUsersQueue.splice(0, RATE_LIMIT_CONFIG.batchSize);
+  activeRequests++;
+  
+  console.log(`🔄 Procesando lote de ${batch.length} usuarios (${pendingUsersQueue.length} pendientes)`);
+  
+  // Procesar el lote
+  const promises = batch.map(item => fetchUserLocationWithRetry(item.username));
+  
   try {
-    console.log(`🔍 Iniciando búsqueda de ubicación para usuario: ${username}`);
+    await Promise.all(promises);
+  } catch (error) {
+    console.log('⚠️ Error procesando lote:', error);
+  }
+  
+  // Resolver las promesas pendientes
+  batch.forEach(item => {
+    const location = userLocationCache.get(item.username) || 'N/A';
+    item.resolve(location);
+  });
+  
+  activeRequests--;
+  
+  // Esperar antes del siguiente lote
+  if (pendingUsersQueue.length > 0) {
+    setTimeout(() => {
+      processUserQueue();
+    }, RATE_LIMIT_CONFIG.delayBetweenBatches);
+  }
+}
+
+// Función para obtener ubicación con retry y backoff exponencial
+async function fetchUserLocationWithRetry(username, retryCount = 0) {
+  try {
+    console.log(`🔍 Obteniendo ubicación para: ${username} (intento ${retryCount + 1})`);
     
-    // Hacer una llamada a la API de Discourse para obtener el perfil del usuario
     const apiUrl = `/u/${username}.json`;
-    console.log(`📡 Llamando a API: ${apiUrl}`);
-    
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
@@ -183,8 +278,6 @@ async function getUserLocation(username) {
       }
     });
     
-
-    
     if (response.ok) {
       const userData = await response.json();
       let location = 'N/A';
@@ -192,24 +285,21 @@ async function getUserLocation(username) {
       // Verificar si tenemos datos del usuario
       if (!userData.user) {
         userLocationCache.set(username, 'N/A');
+        saveCacheToStorage();
         return 'N/A';
       }
       
-      // Buscar la ubicación en el campo "location" estándar (que configuraste como público)
+      // Buscar la ubicación en el campo "location" estándar
       if (userData.user.location) {
         location = userData.user.location;
-      } else {
       }
       
-      // Si no se encontró en location estándar, buscar en campos personalizados públicos
+      // Si no se encontró en location estándar, buscar en campos personalizados
       if (location === 'N/A' && userData.user.user_fields) {
-        
-        // Buscar en campos personalizados (user_fields) que sean públicos
         for (let i = 1; i <= 20; i++) {
           const fieldKey = `user_field_${i}`;
           if (userData.user.user_fields[fieldKey]) {
             const fieldValue = userData.user.user_fields[fieldKey];
-            // Buscar si contiene información de ubicación
             if (fieldValue && typeof fieldValue === 'string' && 
                 (fieldValue.toLowerCase().includes('location') || 
                  fieldValue.toLowerCase().includes('ubicación') ||
@@ -224,9 +314,7 @@ async function getUserLocation(username) {
         }
       }
       
-
-      
-      // Si se encontró ubicación, extraer el país (igual que tu script Python)
+      // Extraer el país si se encontró ubicación
       if (location !== 'N/A') {
         const country = extractCountryFromLocation(location);
         location = country;
@@ -234,18 +322,43 @@ async function getUserLocation(username) {
       
       // Guardar en cache
       userLocationCache.set(username, location);
+      saveCacheToStorage();
       return location;
+      
+    } else if (response.status === 429 && retryCount < RATE_LIMIT_CONFIG.maxRetries) {
+      // Rate limit - esperar con backoff exponencial
+      const delay = RATE_LIMIT_CONFIG.retryDelay * Math.pow(2, retryCount);
+      console.log(`⏳ Rate limit alcanzado para ${username}, reintentando en ${delay}ms`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchUserLocationWithRetry(username, retryCount + 1);
+      
     } else {
-      // Error en la respuesta de la API
+      console.log(`❌ Error ${response.status} para usuario ${username}`);
+      userLocationCache.set(username, 'N/A');
+      saveCacheToStorage();
+      return 'N/A';
     }
+    
   } catch (error) {
-    // Error obteniendo ubicación del usuario
+    console.log(`❌ Error obteniendo ubicación para ${username}:`, error);
+    
+    if (retryCount < RATE_LIMIT_CONFIG.maxRetries) {
+      const delay = RATE_LIMIT_CONFIG.retryDelay * Math.pow(2, retryCount);
+      console.log(`🔄 Reintentando ${username} en ${delay}ms`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchUserLocationWithRetry(username, retryCount + 1);
+    } else {
+      userLocationCache.set(username, 'N/A');
+      saveCacheToStorage();
+      return 'N/A';
+    }
   }
-  
-  // Si falla, guardar N/A en cache para evitar reintentos
-  userLocationCache.set(username, 'N/A');
-  return 'N/A';
 }
+
+// Inicializar cache al cargar
+loadCacheFromStorage();
 
 // Función para extraer el país de la ubicación (basada en tu script de Python)
 function extractCountryFromLocation(location) {
@@ -414,23 +527,38 @@ async function addLocationCellToModernRow(row) {
   }
   
   if (username) {
-    // Mostrar "Cargando..." inicialmente
-    locationCell.textContent = 'Cargando...';
-    locationCell.style.fontStyle = 'italic';
-    locationCell.style.color = '#666';
-    
-    // Obtener la ubicación del usuario
-    getUserLocation(username).then(location => {
+    // Verificar si ya está en cache
+    if (userLocationCache.has(username)) {
+      const location = userLocationCache.get(username);
       locationCell.textContent = location;
       locationCell.style.fontStyle = 'normal';
       locationCell.style.color = '#40312a';
       
-      // Aplicar estilos especiales para ubicaciones válidas
       if (location !== 'N/A') {
         locationCell.style.fontWeight = '500';
         locationCell.style.color = '#8A4A19';
       }
-    });
+    } else {
+      // Mostrar indicador de carga con progreso
+      locationCell.innerHTML = '<span class="loading-indicator">⏳ En cola...</span>';
+      locationCell.style.fontStyle = 'italic';
+      locationCell.style.color = '#666';
+      locationCell.style.fontSize = '0.85em';
+      
+      // Obtener la ubicación del usuario
+      getUserLocation(username).then(location => {
+        locationCell.textContent = location;
+        locationCell.style.fontStyle = 'normal';
+        locationCell.style.color = '#40312a';
+        locationCell.style.fontSize = '0.9em';
+        
+        // Aplicar estilos especiales para ubicaciones válidas
+        if (location !== 'N/A') {
+          locationCell.style.fontWeight = '500';
+          locationCell.style.color = '#8A4A19';
+        }
+      });
+    }
   } else {
     locationCell.textContent = 'N/A';
   }
@@ -459,22 +587,6 @@ function updateGridColumns(table) {
 async function addLocationFilter(table, dataRows) {
   console.log('🔍 Agregando filtro por ubicación...');
   
-  // Esperar a que todas las ubicaciones se carguen
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  // Recopilar todas las ubicaciones únicas
-  const locations = new Set();
-  const locationCells = table.querySelectorAll('.location-column-data');
-  
-  locationCells.forEach(cell => {
-    const location = cell.textContent.trim();
-    if (location && location !== 'Cargando...') {
-      locations.add(location);
-    }
-  });
-  
-  console.log(`📍 Ubicaciones encontradas:`, Array.from(locations));
-  
   // Crear el contenedor del filtro
   const filterContainer = document.createElement('div');
   filterContainer.className = 'location-filter-container';
@@ -487,6 +599,7 @@ async function addLocationFilter(table, dataRows) {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   `;
   
   // Crear etiqueta
@@ -511,7 +624,7 @@ async function addLocationFilter(table, dataRows) {
     min-width: 150px;
   `;
   
-  // Agregar opciones
+  // Agregar opciones iniciales
   const allOption = document.createElement('option');
   allOption.value = 'all';
   allOption.textContent = 'All users';
@@ -522,15 +635,6 @@ async function addLocationFilter(table, dataRows) {
   noLocationOption.textContent = 'No location';
   select.appendChild(noLocationOption);
   
-  // Agregar opciones de ubicaciones
-  const sortedLocations = Array.from(locations).sort();
-  sortedLocations.forEach(location => {
-    const option = document.createElement('option');
-    option.value = location;
-    option.textContent = location;
-    select.appendChild(option);
-  });
-  
   // Crear contador
   const counter = document.createElement('span');
   counter.className = 'location-filter-counter';
@@ -540,11 +644,53 @@ async function addLocationFilter(table, dataRows) {
     font-size: 14px;
   `;
   
+  // Crear indicador de progreso
+  const progressIndicator = document.createElement('span');
+  progressIndicator.className = 'location-progress-indicator';
+  progressIndicator.style.cssText = `
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
+  `;
+  progressIndicator.textContent = 'Cargando ubicaciones...';
+  
   // Función para actualizar el contador
   function updateCounter() {
     const visibleRows = table.querySelectorAll('.directory-table__row:not([style*="display: none"])');
     const totalRows = dataRows.length;
     counter.textContent = `${visibleRows.length} of ${totalRows} users`;
+  }
+  
+  // Función para actualizar el filtro con nuevas ubicaciones
+  function updateLocationOptions() {
+    const locations = new Set();
+    const locationCells = table.querySelectorAll('.location-column-data');
+    
+    locationCells.forEach(cell => {
+      const location = cell.textContent.trim();
+      if (location && location !== 'Cargando...' && location !== '⏳ En cola...' && location !== 'N/A') {
+        locations.add(location);
+      }
+    });
+    
+    // Limpiar opciones existentes (excepto las primeras dos)
+    while (select.children.length > 2) {
+      select.removeChild(select.lastChild);
+    }
+    
+    // Agregar opciones de ubicaciones
+    const sortedLocations = Array.from(locations).sort();
+    sortedLocations.forEach(location => {
+      const option = document.createElement('option');
+      option.value = location;
+      option.textContent = location;
+      select.appendChild(option);
+    });
+    
+    // Ocultar indicador de progreso si hay ubicaciones
+    if (locations.size > 0) {
+      progressIndicator.style.display = 'none';
+    }
   }
   
   // Función para filtrar
@@ -559,7 +705,7 @@ async function addLocationFilter(table, dataRows) {
         if (selectedLocation === 'all') {
           row.style.display = '';
         } else if (selectedLocation === 'no-location') {
-          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Cargando...') ? '' : 'none';
+          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Cargando...' || cellLocation === '⏳ En cola...') ? '' : 'none';
         } else {
           row.style.display = (cellLocation === selectedLocation) ? '' : 'none';
         }
@@ -578,6 +724,7 @@ async function addLocationFilter(table, dataRows) {
   filterContainer.appendChild(label);
   filterContainer.appendChild(select);
   filterContainer.appendChild(counter);
+  filterContainer.appendChild(progressIndicator);
   
   // Insertar el filtro antes de la tabla
   const tableContainer = table.closest('.directory-table-container') || table.parentNode;
@@ -587,6 +734,36 @@ async function addLocationFilter(table, dataRows) {
   
   // Actualizar contador inicial
   updateCounter();
+  
+  // Observar cambios en las celdas de ubicación para actualizar el filtro
+  const observer = new MutationObserver(() => {
+    updateLocationOptions();
+    updateCounter();
+  });
+  
+  // Observar cambios en el contenido de las celdas de ubicación
+  const locationCells = table.querySelectorAll('.location-column-data');
+  locationCells.forEach(cell => {
+    observer.observe(cell, { childList: true, characterData: true, subtree: true });
+  });
+  
+  // Actualizar opciones cada 2 segundos hasta que se carguen todas las ubicaciones
+  const updateInterval = setInterval(() => {
+    updateLocationOptions();
+    updateCounter();
+    
+    // Detener el intervalo si no hay más celdas con "Cargando..." o "En cola..."
+    const loadingCells = table.querySelectorAll('.location-column-data');
+    const stillLoading = Array.from(loadingCells).some(cell => {
+      const text = cell.textContent.trim();
+      return text === 'Cargando...' || text === '⏳ En cola...';
+    });
+    
+    if (!stillLoading) {
+      clearInterval(updateInterval);
+      progressIndicator.style.display = 'none';
+    }
+  }, 2000);
   
   console.log('✅ Filtro por ubicación agregado exitosamente');
 }
@@ -926,6 +1103,24 @@ function applyLocationColumnStyles() {
       font-size: 14px !important;
     }
     
+    .location-progress-indicator {
+      color: var(--text-secondary) !important;
+      font-size: 12px !important;
+      font-style: italic !important;
+      animation: pulse 2s infinite !important;
+    }
+    
+    .loading-indicator {
+      animation: pulse 1.5s infinite !important;
+      color: #e0c052 !important;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
     /* Estilos para la tabla completa */
     .admin-users-table table,
     .admin-users table,
@@ -962,7 +1157,37 @@ function cleanupLocationColumn() {
   existingCells.forEach(cell => cell.remove());
   if (existingStyle) existingStyle.remove();
   if (existingFilter) existingFilter.remove();
+  
+  // Limpiar cola de usuarios pendientes
+  pendingUsersQueue.length = 0;
+  activeRequests = 0;
 }
+
+// Función para limpiar el cache (útil para debugging o cuando se quiera refrescar datos)
+function clearLocationCache() {
+  userLocationCache.clear();
+  localStorage.removeItem('userLocationCache');
+  console.log('🗑️ Cache de ubicaciones limpiado');
+}
+
+// Función para mostrar estadísticas del cache (útil para debugging)
+function showCacheStats() {
+  const cacheSize = userLocationCache.size;
+  const pendingCount = pendingUsersQueue.length;
+  const activeCount = activeRequests;
+  
+  console.log(`📊 Estadísticas del cache:
+    - Ubicaciones en cache: ${cacheSize}
+    - Usuarios en cola: ${pendingCount}
+    - Llamadas activas: ${activeCount}
+    - Tamaño del cache en localStorage: ${localStorage.getItem('userLocationCache') ? JSON.parse(localStorage.getItem('userLocationCache')).length : 0} items`);
+  
+  return { cacheSize, pendingCount, activeCount };
+}
+
+// Hacer funciones disponibles globalmente para debugging
+window.clearLocationCache = clearLocationCache;
+window.showCacheStats = showCacheStats;
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
