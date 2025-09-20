@@ -195,206 +195,163 @@ function saveCacheToStorage() {
   }
 }
 
-// Función para extraer ubicación directamente del DOM sin llamadas a la API
+// Función simplificada para extraer ubicación del usuario
 function extractLocationFromDOM(username) {
-  // Verificar cache primero, pero re-extraer si es "N/A" (podría ser un error previo)
+  // Verificar cache primero
   if (userLocationCache.has(username)) {
     const cachedLocation = userLocationCache.get(username);
-    // Debug específico para "Read Time" en cache
-    if (cachedLocation === 'Read Time') {
-      console.log(`DEBUG: "Read Time" encontrado en cache para usuario ${username}`);
-    }
-    // Si el cache tiene "N/A", intentar re-extraer
+    // Solo re-extraer si es "N/A" y queremos intentar de nuevo
     if (cachedLocation === 'N/A') {
-      console.log(`DEBUG: Re-extraendo ubicación para usuario ${username} (tenía N/A en cache)`);
+      console.log(`Re-extraendo ubicación para usuario ${username} (tenía N/A en cache)`);
     } else {
       return cachedLocation;
     }
   }
   
-  console.log(`DEBUG: Extrayendo ubicación para usuario ${username}`);
+  console.log(`Extrayendo ubicación para usuario ${username}`);
   let location = 'N/A';
   
-  // Buscar enlaces de perfil del usuario en la página actual
-  const userLinks = document.querySelectorAll(`a[href*="/u/${username}"]`);
-  console.log(`DEBUG: Encontrados ${userLinks.length} enlaces para usuario ${username}`);
-  
-  for (const link of userLinks) {
-    // Buscar en el contexto del enlace por información de ubicación
-    const userCard = link.closest('.user-card') || link.closest('.directory-table__row') || link.closest('tr');
-    
-    if (userCard) {
-      console.log(`DEBUG: userCard encontrado para usuario ${username}`);
-      // Buscar en elementos de texto que puedan contener ubicación
-      const textElements = userCard.querySelectorAll('span, div, td, .directory-table__cell');
-      console.log(`DEBUG: Encontrados ${textElements.length} elementos de texto para usuario ${username}`);
-      
-      for (const element of textElements) {
-        const text = element.textContent.trim();
-        
-        // Buscar patrones de ubicación comunes
-        if (isValidLocation(text)) {
-          // Verificar si es un país conocido
-          const country = extractCountryFromLocation(text);
-          if (country !== 'Sin ubicación') {
-            location = country;
-            break;
-          }
+  // Estrategia 1: Buscar en el perfil del usuario (más confiable)
+  try {
+    const userProfileLink = document.querySelector(`a[href="/u/${username}"]`);
+    if (userProfileLink) {
+      // Buscar en el contexto del enlace del perfil
+      const profileContainer = userProfileLink.closest('.user-card, .directory-table__row, tr');
+      if (profileContainer) {
+        // Buscar texto que parezca una ubicación real
+        const locationText = findLocationInProfile(profileContainer, username);
+        if (locationText) {
+          location = locationText;
+          console.log(`Ubicación encontrada en perfil para ${username}: "${location}"`);
         }
       }
-      
-      if (location !== 'N/A') break;
     }
+  } catch (error) {
+    console.log(`Error buscando en perfil de ${username}:`, error);
   }
   
-  // Si no se encontró en el DOM, intentar extraer de información ya disponible
+  // Estrategia 2: Buscar en la fila de la tabla (fallback)
   if (location === 'N/A') {
-    // Buscar específicamente en la fila del usuario
-    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
-    
-    if (userRow) {
-      // Buscar en todas las celdas de la fila específica del usuario
-      const cells = userRow.querySelectorAll('.directory-table__cell, td');
-      
-      for (const cell of cells) {
-        const cellText = cell.textContent.trim();
-        
-        // Buscar patrones de ubicación en las celdas
-        if (isValidLocation(cellText)) {
-          const country = extractCountryFromLocation(cellText);
-          if (country !== 'Sin ubicación') {
-            location = country;
-            break;
-          }
+    try {
+      const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+      if (userRow) {
+        const locationText = findLocationInTableRow(userRow, username);
+        if (locationText) {
+          location = locationText;
+          console.log(`Ubicación encontrada en fila de tabla para ${username}: "${location}"`);
         }
       }
+    } catch (error) {
+      console.log(`Error buscando en fila de tabla de ${username}:`, error);
     }
   }
   
-  // Si aún no se encontró, intentar extraer de atributos data o información oculta
+  // Estrategia 3: Buscar en atributos específicos
   if (location === 'N/A') {
-    // Buscar en elementos con atributos data que puedan contener información de ubicación
-    const dataElements = document.querySelectorAll('[data-user-location], [data-location], [title*="location" i], [title*="ubicación" i]');
-    
-    for (const element of dataElements) {
-      const title = element.getAttribute('title') || '';
-      const dataLocation = element.getAttribute('data-user-location') || element.getAttribute('data-location') || '';
-      
-      if (title || dataLocation) {
-        const text = (title + ' ' + dataLocation).trim();
-        const country = extractCountryFromLocation(text);
-        if (country !== 'Sin ubicación') {
-          location = country;
-          break;
-        }
+    try {
+      const locationText = findLocationInAttributes(username);
+      if (locationText) {
+        location = locationText;
+        console.log(`Ubicación encontrada en atributos para ${username}: "${location}"`);
       }
+    } catch (error) {
+      console.log(`Error buscando en atributos de ${username}:`, error);
     }
   }
   
-  // Si aún no se encontró, buscar en el perfil del usuario (si está disponible)
-  if (location === 'N/A') {
-    // Buscar en elementos que puedan contener información de perfil
-    const profileElements = document.querySelectorAll('[data-user-profile], [data-profile], .user-profile, .profile-info');
-    
-    for (const element of profileElements) {
-      const text = element.textContent.trim();
-      if (isValidLocation(text)) {
-        const country = extractCountryFromLocation(text);
-        if (country !== 'Sin ubicación') {
-          location = country;
-          break;
-        }
-      }
-    }
-  }
-  
-  // Si aún no se encontró, buscar en todos los elementos de la fila del usuario
-  if (location === 'N/A') {
-    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
-    
-    if (userRow) {
-      console.log(`DEBUG: Buscando en todos los elementos de la fila para usuario ${username}`);
-      
-      // Buscar en todos los elementos de la fila, incluyendo elementos anidados
-      const allElements = userRow.querySelectorAll('*');
-      console.log(`DEBUG: Encontrados ${allElements.length} elementos en la fila para usuario ${username}`);
-      
-      for (const element of allElements) {
-        const text = element.textContent.trim();
-        
-        // Solo procesar texto que no sea muy largo y que no sea el username
-        if (text.length > 2 && text.length < 50 && text !== username) {
-          if (isValidLocation(text)) {
-            const country = extractCountryFromLocation(text);
-            if (country !== 'Sin ubicación') {
-              location = country;
-              console.log(`DEBUG: Ubicación encontrada en elemento para usuario ${username}: "${text}" -> "${country}"`);
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  // Si aún no se encontró, buscar en atributos title y data-* de todos los elementos
-  if (location === 'N/A') {
-    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
-    
-    if (userRow) {
-      console.log(`DEBUG: Buscando en atributos de la fila para usuario ${username}`);
-      
-      const allElements = userRow.querySelectorAll('*');
-      
-      for (const element of allElements) {
-        // Buscar en atributos title
-        const title = element.getAttribute('title');
-        if (title && title.length > 2 && title.length < 50) {
-          if (isValidLocation(title)) {
-            const country = extractCountryFromLocation(title);
-            if (country !== 'Sin ubicación') {
-              location = country;
-              console.log(`DEBUG: Ubicación encontrada en atributo title para usuario ${username}: "${title}" -> "${country}"`);
-              break;
-            }
-          }
-        }
-        
-        // Buscar en atributos data-*
-        const attributes = element.attributes;
-        for (const attr of attributes) {
-          if (attr.name.startsWith('data-') && attr.value && attr.value.length > 2 && attr.value.length < 50) {
-            if (isValidLocation(attr.value)) {
-              const country = extractCountryFromLocation(attr.value);
-              if (country !== 'Sin ubicación') {
-                location = country;
-                console.log(`DEBUG: Ubicación encontrada en atributo ${attr.name} para usuario ${username}: "${attr.value}" -> "${country}"`);
-                break;
-              }
-            }
-          }
-        }
-        
-        if (location !== 'N/A') break;
-      }
-    }
-  }
-      
-  // Debug si se está guardando "Read Time"
-  if (location === 'Read Time') {
-    console.log(`DEBUG: ERROR - Se está guardando "Read Time" en cache para usuario ${username}`);
-    console.log(`DEBUG: Esto no debería pasar si isValidLocation funciona correctamente`);
-    // Forzar a N/A para evitar guardar "Read Time"
-    location = 'N/A';
-  }
-  
-  console.log(`DEBUG: Resultado final para usuario ${username}: "${location}"`);
+  console.log(`Resultado final para usuario ${username}: "${location}"`);
   
   // Guardar en cache
   userLocationCache.set(username, location);
   saveCacheToStorage();
   
   return location;
+}
+
+// Función para buscar ubicación en el perfil del usuario
+function findLocationInProfile(container, username) {
+  // Buscar en elementos que típicamente contienen información de ubicación
+  const locationSelectors = [
+    '.user-location',
+    '.location',
+    '.user-info .location',
+    '.profile-location',
+    '[data-location]',
+    '.user-details .location'
+  ];
+  
+  for (const selector of locationSelectors) {
+    const element = container.querySelector(selector);
+    if (element) {
+      const text = element.textContent.trim();
+      if (isValidLocationSimple(text)) {
+        return extractCountryFromLocation(text);
+      }
+    }
+  }
+  
+  // Buscar en todo el texto del contenedor
+  const allText = container.textContent;
+  const locationMatch = allText.match(/\b([A-Z][a-z]+(?: [A-Z][a-z]+)*)\b/g);
+  
+  if (locationMatch) {
+    for (const match of locationMatch) {
+      if (isValidLocationSimple(match)) {
+        return extractCountryFromLocation(match);
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Función para buscar ubicación en la fila de la tabla
+function findLocationInTableRow(row, username) {
+  // Buscar en celdas específicas que podrían contener ubicación
+  const cells = row.querySelectorAll('.directory-table__cell, td');
+  
+  for (const cell of cells) {
+    const text = cell.textContent.trim();
+    
+    // Saltar celdas que obviamente no contienen ubicación
+    if (text === username || text.includes('@') || text.includes('http') || 
+        text.match(/^\d+$/) || text.match(/^\d+[a-z]+$/) || 
+        text.match(/\d{4}-\d{2}-\d{2}/) || text.match(/\d{2}:\d{2}/)) {
+      continue;
+    }
+    
+    if (isValidLocationSimple(text)) {
+      return extractCountryFromLocation(text);
+    }
+  }
+  
+  return null;
+}
+
+// Función para buscar ubicación en atributos
+function findLocationInAttributes(username) {
+  const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+  if (!userRow) return null;
+  
+  const elements = userRow.querySelectorAll('*');
+  
+  for (const element of elements) {
+    // Buscar en atributos title
+    const title = element.getAttribute('title');
+    if (title && isValidLocationSimple(title)) {
+      return extractCountryFromLocation(title);
+    }
+    
+    // Buscar en atributos data-*
+    const attributes = element.attributes;
+    for (const attr of attributes) {
+      if (attr.name.startsWith('data-') && attr.value && isValidLocationSimple(attr.value)) {
+        return extractCountryFromLocation(attr.value);
+      }
+    }
+  }
+  
+  return null;
 }
 
 // Función para obtener ubicación (ahora sin API calls)
@@ -523,126 +480,100 @@ function setupInfiniteScrollObserver() {
 
 // Inicializar cache al cargar
 loadCacheFromStorage();
-// Limpiar entradas inválidas del cache
+// Limpiar cache de entradas problemáticas
 cleanInvalidCacheEntries();
-// Limpiar entradas N/A del cache para permitir re-extracción
-cleanNACacheEntries();
-// Limpiar entradas de fecha/hora del cache
 cleanDateTimeCacheEntries();
 
-// Función para validar si un texto es una ubicación válida
-function isValidLocation(text) {
-  if (!text || text.length < 2 || text.length > 100) {
+// Función simplificada para validar ubicaciones
+function isValidLocationSimple(text) {
+  if (!text || text.length < 2 || text.length > 50) {
     return false;
   }
   
-  // Debug para ver qué texto se está evaluando
-  if (text.length > 2 && text.length < 50) {
-    console.log(`DEBUG: Evaluando texto: "${text}"`);
-  }
-  
-  // Verificación específica para "Read Time" y otros textos de UI comunes
-  const uiTexts = [
-    'read time', 'last emailed', 'seen', 'topics viewed', 'posts read', 
-    'created', 'status', 'joined', 'posts', 'topics', 'likes', 'active', 
-    'new', 'staff', 'suspended', 'silenced', 'staged', 'trust', 'level',
-    'admin', 'moderator', 'user', 'member', 'online', 'offline', 'away',
-    'busy', 'do not disturb', 'profile', 'avatar', 'email', 'username',
-    'name', 'title', 'role', 'permissions', 'settings', 'preferences',
-    'account', 'login', 'logout', 'search', 'filter', 'sort', 'order',
-    'date', 'updated', 'deleted', 'archived', 'hidden', 'private', 'public',
-    'draft', 'published', 'pending', 'approved', 'rejected', 'flagged',
-    'reported', 'banned', 'muted', 'warned', 'restricted', 'limited',
-    'days', 'hours', 'minutes', 'seconds', 'ago', 'today', 'yesterday',
-    'week', 'month', 'year', 'january', 'february', 'march', 'april',
-    'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
-    'am', 'pm', 'morning', 'afternoon', 'evening', 'night', 'midnight', 'noon'
+  // Lista de países comunes (expandible)
+  const commonCountries = [
+    'Spain', 'Italy', 'France', 'Germany', 'United Kingdom', 'Portugal', 'Netherlands',
+    'Belgium', 'Austria', 'Switzerland', 'Sweden', 'Norway', 'Denmark', 'Finland',
+    'Poland', 'Czech Republic', 'Hungary', 'Romania', 'Bulgaria', 'Greece', 'Turkey',
+    'United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Chile', 'Colombia',
+    'Australia', 'New Zealand', 'Japan', 'China', 'India', 'South Korea', 'Thailand',
+    'South Africa', 'Egypt', 'Morocco', 'Tunisia', 'Algeria', 'Libya', 'Nigeria',
+    'Kenya', 'Ghana', 'Senegal', 'Ivory Coast', 'Mali', 'Burkina Faso', 'Niger',
+    'Chad', 'Sudan', 'Ethiopia', 'Somalia', 'Uganda', 'Tanzania', 'Rwanda',
+    'Burundi', 'Democratic Republic of Congo', 'Republic of Congo', 'Cameroon',
+    'Central African Republic', 'Equatorial Guinea', 'Gabon', 'São Tomé and Príncipe',
+    'Angola', 'Zambia', 'Zimbabwe', 'Botswana', 'Namibia', 'Lesotho', 'Swaziland',
+    'Mozambique', 'Madagascar', 'Mauritius', 'Seychelles', 'Comoros', 'Djibouti',
+    'Eritrea', 'Somaliland', 'Western Sahara', 'Cape Verde', 'Guinea-Bissau',
+    'Guinea', 'Sierra Leone', 'Liberia', 'Gambia', 'Mauritania', 'Albania',
+    'Bosnia and Herzegovina', 'Croatia', 'Serbia', 'Montenegro', 'North Macedonia',
+    'Kosovo', 'Slovenia', 'Slovakia', 'Lithuania', 'Latvia', 'Estonia', 'Belarus',
+    'Ukraine', 'Moldova', 'Russia', 'Kazakhstan', 'Uzbekistan', 'Turkmenistan',
+    'Tajikistan', 'Kyrgyzstan', 'Afghanistan', 'Pakistan', 'Bangladesh', 'Sri Lanka',
+    'Maldives', 'Nepal', 'Bhutan', 'Myanmar', 'Laos', 'Cambodia', 'Vietnam',
+    'Malaysia', 'Singapore', 'Indonesia', 'Philippines', 'Brunei', 'East Timor',
+    'Papua New Guinea', 'Solomon Islands', 'Vanuatu', 'Fiji', 'Samoa', 'Tonga',
+    'Palau', 'Marshall Islands', 'Micronesia', 'Nauru', 'Kiribati', 'Tuvalu',
+    'Monaco', 'San Marino', 'Vatican City', 'Liechtenstein', 'Andorra', 'Malta',
+    'Cyprus', 'Iceland', 'Luxembourg', 'Ireland', 'Israel', 'Palestine', 'Jordan',
+    'Lebanon', 'Syria', 'Iraq', 'Iran', 'Saudi Arabia', 'Yemen', 'Oman', 'UAE',
+    'Qatar', 'Bahrain', 'Kuwait', 'Iraq', 'Afghanistan', 'Uzbekistan', 'Tajikistan'
   ];
   
   const lowerText = text.toLowerCase();
   
-  // Verificar si es exactamente uno de los textos de UI
-  for (const uiText of uiTexts) {
-    if (lowerText === uiText || lowerText.includes(uiText)) {
-      console.log(`DEBUG: Texto "${text}" rechazado por ser texto de UI: "${uiText}"`);
-      return false;
+  // Verificar si es un país conocido
+  for (const country of commonCountries) {
+    if (lowerText === country.toLowerCase() || lowerText.includes(country.toLowerCase())) {
+      return true;
     }
   }
   
-  // Verificar patrones de texto que NO son ubicaciones
-  if (text.includes('@') || 
-      text.includes('http') ||
-      text.includes('www') ||
-      text.match(/^\d+$/) ||
-      text.match(/^\d+[a-z]*$/) ||
-      text.match(/^[a-z]+\d+$/) ||
-      text.match(/\d{4}-\d{2}-\d{2}/) || // fechas
-      text.match(/\d{2}:\d{2}/) || // horas
-      text.match(/^\d+[a-z]+\d+$/) || // patrones como "2days"
-      text.match(/^< \d+[a-z]+$/) || // patrones como "< 1m"
-      text.match(/^\d+[a-z]+$/) || // patrones como "2h", "3mon"
-      text.match(/^[a-z]+\d+[a-z]+$/) || // patrones como "mar2h"
-      text.match(/^\d{4} \d{1,2}:\d{2} [ap]m$/) || // patrones como "2025 8:56 pm"
-      text.match(/^[A-Za-z]{3} \d{1,2}, \d{4} \d{1,2}:\d{2} [ap]m$/) || // patrones como "Sep 19, 2025 8:56 pm"
-      text.match(/^[A-Za-z]{3} \d{1,2}, \d{4}$/) || // patrones como "Sep 19, 2025"
-      text.match(/^\d{1,2}:\d{2} [ap]m$/) || // patrones como "8:56 pm"
-      text.match(/^\d{4}$/) || // solo años como "2025"
-      text.match(/^\d{1,2}:\d{2}$/) || // patrones como "8:56"
-      text.match(/^[A-Za-z]{3} \d{1,2}$/) || // patrones como "Sep 19"
-      text.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/) || // patrones como "19/09/2025"
-      text.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) { // patrones como "2025-09-19"
-    console.log(`DEBUG: Texto "${text}" rechazado por patrón inválido (fecha/hora)`);
-    return false;
+  // Verificar patrones básicos de ubicación
+  // Debe empezar con mayúscula y contener solo letras, espacios, comas y puntos
+  if (text.match(/^[A-Z][a-zA-Z\s,.-]+$/) && 
+      text.length >= 3 && 
+      text.length <= 30 &&
+      !text.match(/\d/) && // No debe contener números
+      !text.includes('@') && // No debe contener @
+      !text.includes('http') && // No debe contener http
+      !text.includes('www') && // No debe contener www
+      !text.match(/^\d+/) && // No debe empezar con número
+      !text.match(/[ap]m$/) && // No debe terminar en am/pm
+      !text.match(/\d{4}/) && // No debe contener años
+      !text.match(/\d{1,2}:\d{2}/) && // No debe contener horas
+      !text.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i) && // No debe empezar con mes
+      !text.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) && // No días de la semana
+      !text.match(/(today|yesterday|tomorrow)/i)) { // No palabras temporales
+    return true;
   }
   
-  // Verificar si contiene solo caracteres especiales o símbolos
-  if (text.match(/^[^a-zA-Z0-9\s,.-]+$/)) {
-    console.log(`DEBUG: Texto "${text}" rechazado por contener solo caracteres especiales`);
-    return false;
-  }
-  
-  // Verificar si es muy corto y no parece una ubicación
-  if (text.length < 3 && !text.match(/^[A-Z][a-z]+$/)) {
-    console.log(`DEBUG: Texto "${text}" rechazado por ser muy corto`);
-    return false;
-  }
-  
-  // Verificar si contiene al menos una letra
-  if (!/[a-zA-Z]/.test(text)) {
-    console.log(`DEBUG: Texto "${text}" rechazado por no contener letras`);
-    return false;
-  }
-  
-  // Verificar si parece un username (solo minúsculas, números, puntos, guiones bajos)
-  if (text.match(/^[a-z0-9._-]+$/) && text.length > 3) {
-    console.log(`DEBUG: Texto "${text}" rechazado por parecer username`);
-    return false;
-  }
-  
-  console.log(`DEBUG: Texto "${text}" ACEPTADO como ubicación válida`);
-  return true;
+  return false;
 }
 
-// Función para extraer el país de la ubicación (basada en tu script de Python)
+// Función legacy para mantener compatibilidad
+function isValidLocation(text) {
+  return isValidLocationSimple(text);
+}
+
+// Función simplificada para extraer el país de la ubicación
 function extractCountryFromLocation(location) {
   if (!location || location === 'N/A') {
-    return 'Sin ubicación';
+    return 'N/A';
   }
 
-  // Validar que sea una ubicación válida
-  if (!isValidLocation(location)) {
-    return 'Sin ubicación';
-  }
+  // Limpiar y normalizar el texto
+  const cleanLocation = location.trim();
 
   // Si la ubicación contiene una coma, tomar la última parte (país)
-  if (location.includes(',')) {
-    const parts = location.split(',');
+  if (cleanLocation.includes(',')) {
+    const parts = cleanLocation.split(',');
     const country = parts[parts.length - 1].trim();
-    return isValidLocation(country) ? country : 'Sin ubicación';
+    return country || 'N/A';
   }
 
   // Si no hay coma, asumir que es solo el país
-  return location.trim();
+  return cleanLocation;
 }
 
 // Función para agregar la columna Location
@@ -1367,35 +1298,37 @@ function clearLocationCache() {
   console.log('Cache de ubicaciones limpiado');
 }
 
-// Función para limpiar entradas específicas del cache que contengan "Read Time"
+// Función para limpiar entradas problemáticas del cache
 function cleanInvalidCacheEntries() {
   let cleaned = 0;
+  const invalidPatterns = [
+    'read time', 'last emailed', 'seen', 'topics viewed', 'posts read',
+    'created', 'status', 'joined', 'posts', 'topics', 'likes', 'active',
+    'admin', 'moderator', 'user', 'member', 'online', 'offline', 'away'
+  ];
+  
   for (const [username, location] of userLocationCache.entries()) {
-    if (location === 'Read Time' || location.toLowerCase().includes('read time')) {
+    const lowerLocation = location.toLowerCase();
+    let shouldDelete = false;
+    
+    // Verificar si contiene texto de UI inválido
+    for (const pattern of invalidPatterns) {
+      if (lowerLocation.includes(pattern)) {
+        shouldDelete = true;
+        break;
+      }
+    }
+    
+    if (shouldDelete) {
       userLocationCache.delete(username);
       cleaned++;
+      console.log(`Limpiada entrada inválida del cache: ${username} -> "${location}"`);
     }
   }
   
   if (cleaned > 0) {
     saveCacheToStorage();
     console.log(`Limpiadas ${cleaned} entradas inválidas del cache`);
-  }
-}
-
-// Función para limpiar entradas "N/A" del cache y forzar re-extracción
-function cleanNACacheEntries() {
-  let cleaned = 0;
-  for (const [username, location] of userLocationCache.entries()) {
-    if (location === 'N/A') {
-      userLocationCache.delete(username);
-      cleaned++;
-    }
-  }
-  
-  if (cleaned > 0) {
-    saveCacheToStorage();
-    console.log(`Limpiadas ${cleaned} entradas N/A del cache para re-extracción`);
   }
 }
 
@@ -1499,7 +1432,6 @@ function debugUserDOM(username) {
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
-window.cleanNACacheEntries = cleanNACacheEntries;
 window.cleanDateTimeCacheEntries = cleanDateTimeCacheEntries;
 window.showCacheStats = showCacheStats;
 window.debugUserDOM = debugUserDOM;
