@@ -432,39 +432,26 @@ function getUserLocation(username) {
   return extractLocationFromDOM(username);
 }
 
-// Función para procesar nuevas filas que se agreguen dinámicamente
-function processNewRows() {
+// Función para procesar todas las filas de la tabla (para paginación)
+function processAllRows() {
   if (!currentTable) return;
   
   const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
-  const newRows = [];
+  console.log(`Procesando ${allRows.length} filas de la tabla actual`);
   
-  // Encontrar filas que no tienen la columna de ubicación
-  allRows.forEach(row => {
-    if (!row.querySelector('.location-column-data')) {
-      newRows.push(row);
-    }
+  // Procesar todas las filas
+  allRows.forEach((row, index) => {
+    // Procesar con delay escalonado para evitar problemas de rendimiento
+    setTimeout(() => {
+      addLocationCellToModernRow(row);
+    }, index * 10); // 10ms entre cada fila (más rápido para paginación)
   });
   
-  if (newRows.length > 0) {
-    console.log(`Procesando ${newRows.length} nuevas filas`);
-    
-    // Procesar las nuevas filas con delay para asegurar que el DOM esté renderizado
-    setTimeout(() => {
-      newRows.forEach((row, index) => {
-        // Procesar con delay escalonado para evitar problemas de rendimiento
-        setTimeout(() => {
-          addLocationCellToModernRow(row);
-        }, index * 50); // 50ms entre cada fila
-      });
-      
-      // Actualizar después de un delay adicional
-      setTimeout(() => {
-        currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
-        updateFilterAndCounter();
-      }, newRows.length * 50 + 100);
-    }, 200); // Esperar 200ms antes de procesar
-  }
+  // Actualizar después de un delay
+  setTimeout(() => {
+    currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
+    updateFilterAndCounter();
+  }, allRows.length * 10 + 100);
 }
 
 // Función para actualizar el filtro y contador
@@ -509,60 +496,115 @@ function updateLocationOptions() {
   });
 }
 
-// Función para configurar el MutationObserver para detectar scroll infinito
-function setupInfiniteScrollObserver() {
+// Función para configurar paginación (sin scroll infinito)
+function setupPagination() {
   if (!currentTable) return;
   
-  let processingTimeout = null;
+  console.log('Configurando paginación en lugar de scroll infinito');
   
-  // Crear un observer para detectar cambios en el DOM
-  const observer = new MutationObserver(function(mutations) {
-    let shouldProcess = false;
+  // Buscar el contenedor de paginación existente
+  const paginationContainer = document.querySelector('.pagination, .page-navigation, .nav-pills');
+  
+  if (paginationContainer) {
+    console.log('Paginación existente encontrada');
     
-    mutations.forEach(function(mutation) {
-      // Verificar si se agregaron nuevos nodos
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        mutation.addedNodes.forEach(function(node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // Verificar si es una fila de tabla o contiene filas
-            if (node.classList && (node.classList.contains('directory-table__row') || node.querySelector('.directory-table__row'))) {
-              shouldProcess = true;
-            }
-          }
-        });
+    // Agregar listener para cuando cambie la página
+    paginationContainer.addEventListener('click', function(event) {
+      const link = event.target.closest('a');
+      if (link && link.href) {
+        console.log('Navegación de página detectada, limpiando y reinicializando...');
+        
+        // Limpiar la columna de ubicación actual
+        cleanupLocationColumn();
+        
+        // Reinicializar después de un delay para que la nueva página se cargue
+        setTimeout(() => {
+          console.log('Reinicializando columna de ubicación para nueva página...');
+          addLocationColumn();
+        }, 1000);
       }
     });
-    
-    if (shouldProcess) {
-      // Limpiar timeout anterior si existe
-      if (processingTimeout) {
-        clearTimeout(processingTimeout);
-      }
+  } else {
+    console.log('No se encontró paginación existente, usando navegación estándar');
+  }
+}
+
+// Función para deshabilitar scroll infinito si está habilitado
+function disableInfiniteScroll() {
+  console.log('Deshabilitando scroll infinito si está habilitado');
+  
+  // Buscar y deshabilitar elementos de scroll infinito
+  const infiniteScrollElements = document.querySelectorAll('[data-infinite-scroll], .infinite-scroll, .load-more');
+  
+  infiniteScrollElements.forEach(element => {
+    element.style.display = 'none';
+    console.log('Elemento de scroll infinito deshabilitado');
+  });
+  
+  // Buscar botones de "Load More" y ocultarlos
+  const loadMoreButtons = document.querySelectorAll('button[data-load-more], .load-more-button, .show-more');
+  
+  loadMoreButtons.forEach(button => {
+    button.style.display = 'none';
+    console.log('Botón "Load More" deshabilitado');
+  });
+  
+  // Deshabilitar event listeners de scroll infinito
+  if (window.Discourse && window.Discourse.InfiniteScroll) {
+    try {
+      window.Discourse.InfiniteScroll.disable();
+      console.log('Discourse InfiniteScroll deshabilitado');
+    } catch (error) {
+      console.log('No se pudo deshabilitar InfiniteScroll:', error);
+    }
+  }
+}
+
+// Función para configurar manejadores de navegación
+function setupNavigationHandlers() {
+  console.log('Configurando manejadores de navegación para paginación');
+  
+  // Deshabilitar scroll infinito
+  disableInfiniteScroll();
+  
+  // Ejecutar cuando cambia la URL (navegación SPA de Discourse)
+  let currentUrl = window.location.href;
+  const observer = new MutationObserver(function() {
+    if (window.location.href !== currentUrl) {
+      currentUrl = window.location.href;
       
-      // Usar setTimeout con delay más largo para asegurar que el DOM esté completamente renderizado
-      processingTimeout = setTimeout(() => {
-        console.log('MutationObserver detectó nuevas filas, procesando...');
-        processNewRows();
-      }, 1000); // Aumentar a 1 segundo para asegurar renderizado completo
+      console.log('Cambio de URL detectado, reinicializando columna de ubicación...');
+      
+      // Limpiar columna anterior
+      cleanupLocationColumn();
+      
+      // Agregar nueva columna
+      setTimeout(addLocationColumn, 1000);
     }
   });
   
-  // Observar cambios en el contenedor de la tabla
-  const tableContainer = currentTable.parentNode;
-  if (tableContainer) {
-    observer.observe(tableContainer, {
-      childList: true,
-      subtree: true
-    });
-  }
-  
-  // También observar cambios directamente en la tabla
-  observer.observe(currentTable, {
+  observer.observe(document.body, {
     childList: true,
     subtree: true
   });
   
-  console.log('MutationObserver configurado para scroll infinito con delay de 1 segundo');
+  // También ejecutar cuando se hace clic en enlaces de navegación
+  document.addEventListener('click', function(event) {
+    const target = event.target.closest('a');
+    if (target && target.href) {
+      const href = target.href;
+      const isAdminUsersLink = href.includes('/admin/users/list/');
+      const isPublicUsersLink = href.includes('/u') && (href.includes('order=') || href.endsWith('/u'));
+      
+      if (isAdminUsersLink || isPublicUsersLink) {
+        console.log('Navegación de usuarios detectada, reinicializando...');
+        setTimeout(() => {
+          cleanupLocationColumn();
+          addLocationColumn();
+        }, 1000);
+      }
+    }
+  });
 }
 
 // Inicializar cache al cargar
@@ -783,10 +825,8 @@ function addColumnToModernTable(table, columnHeaders, dataRows) {
     }
   }
   
-  // Agregar celdas de datos
-  for (const row of dataRows) {
-    addLocationCellToModernRow(row);
-  }
+  // Agregar celdas de datos usando el nuevo enfoque
+  processAllRows();
   
   // Actualizar el CSS Grid para incluir la nueva columna
   updateGridColumns(table);
@@ -1001,8 +1041,8 @@ function addLocationFilter(table, dataRows) {
   // Actualizar opciones inmediatamente (ya que no hay API calls)
   updateLocationOptions();
   
-  // Configurar MutationObserver para detectar nuevas filas
-  setupInfiniteScrollObserver();
+  // Configurar paginación en lugar de scroll infinito
+  setupPagination();
   
   console.log('Filtro por ubicación agregado exitosamente');
 }
@@ -1598,55 +1638,8 @@ async function initLocationColumn() {
     // Ejecutar cuando se carga la página
     await addLocationColumn();
     
-    // Ejecutar cuando cambia la URL (navegación SPA de Discourse)
-    let currentUrl = window.location.href;
-    const observer = new MutationObserver(function() {
-      if (window.location.href !== currentUrl) {
-        currentUrl = window.location.href;
-        
-        // Limpiar columna anterior
-        cleanupLocationColumn();
-        
-        // Agregar nueva columna
-        setTimeout(addLocationColumn, 1000);
-      }
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // También ejecutar cuando se hace clic en enlaces de navegación
-    document.addEventListener('click', function(event) {
-      const target = event.target.closest('a');
-      if (target && target.href) {
-        const href = target.href;
-        const isAdminUsersLink = href.includes('/admin/users/list/');
-        const isPublicUsersLink = href.includes('/u') && (href.includes('order=') || href.endsWith('/u'));
-        
-        if (isAdminUsersLink || isPublicUsersLink) {
-          setTimeout(() => {
-            cleanupLocationColumn();
-            addLocationColumn();
-          }, 1000);
-        }
-      }
-    });
-    
-    // Ejecutar cuando se cambia entre pestañas (Active, New, Staff, etc.) o ordenamientos públicos
-    document.addEventListener('click', function(event) {
-      const target = event.target.closest('a');
-      if (target && target.classList.contains('ember-view')) {
-        const href = target.getAttribute('href');
-        if (href && (href.includes('/admin/users/list/') || href.includes('/admin/groups') || (href.includes('/u') && (href.includes('order=') || href.endsWith('/u'))))) {
-          setTimeout(() => {
-            cleanupLocationColumn();
-            addLocationColumn();
-          }, 1500);
-        }
-      }
-    });
+    // Configurar navegación para paginación
+    setupNavigationHandlers();
     
     console.log('Columna Location inicializada correctamente');
     
