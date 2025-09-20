@@ -162,6 +162,12 @@ function addEventListenerSafe(element, event, handler) {
 // Cache para almacenar las ubicaciones de los usuarios (solo memoria, sin API calls)
 const userLocationCache = new Map();
 
+// Sistema de cola para evitar rate limiting
+let requestQueue = [];
+let isProcessingQueue = false;
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 segundo entre peticiones
+
 // Variables globales para el manejo de scroll infinito
 let currentTable = null;
 let currentDataRows = [];
@@ -449,8 +455,62 @@ async function getUserLocation(username) {
   return domLocation;
 }
 
-// Función para extraer ubicación desde el perfil del usuario
-async function extractLocationFromProfile(username) {
+// Función para agregar una petición a la cola
+function queueProfileRequest(username, resolve, reject) {
+  requestQueue.push({ username, resolve, reject });
+  console.log(`Petición agregada a la cola para ${username}. Cola: ${requestQueue.length}`);
+  
+  // Iniciar procesamiento si no está en curso
+  if (!isProcessingQueue) {
+    processRequestQueue();
+  }
+}
+
+// Función para procesar la cola de peticiones
+async function processRequestQueue() {
+  if (isProcessingQueue || requestQueue.length === 0) {
+    return;
+  }
+  
+  isProcessingQueue = true;
+  console.log(`Procesando cola de peticiones. Pendientes: ${requestQueue.length}`);
+  
+  while (requestQueue.length > 0) {
+    const { username, resolve, reject } = requestQueue.shift();
+    
+    try {
+      // Calcular delay para evitar rate limiting
+      const now = Date.now();
+      const timeSinceLastRequest = now - lastRequestTime;
+      
+      if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        const delay = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+        console.log(`Esperando ${delay}ms antes de la siguiente petición para ${username}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      console.log(`Procesando petición para ${username}`);
+      const location = await fetchUserProfile(username);
+      lastRequestTime = Date.now();
+      
+      // Guardar en cache
+      userLocationCache.set(username, location);
+      saveCacheToStorage();
+      
+      resolve(location);
+      
+    } catch (error) {
+      console.log(`Error procesando petición para ${username}:`, error);
+      reject(error);
+    }
+  }
+  
+  isProcessingQueue = false;
+  console.log('Cola de peticiones procesada completamente');
+}
+
+// Función para hacer la petición al perfil del usuario
+async function fetchUserProfile(username) {
   try {
     // Hacer una llamada al perfil del usuario
     const response = await fetch(`/u/${username}.json`);
@@ -476,6 +536,13 @@ async function extractLocationFromProfile(username) {
     console.log(`Error en fetch del perfil para ${username}:`, error);
     return 'N/A';
   }
+}
+
+// Función para extraer ubicación desde el perfil del usuario (ahora usa cola)
+function extractLocationFromProfile(username) {
+  return new Promise((resolve, reject) => {
+    queueProfileRequest(username, resolve, reject);
+  });
 }
 
 // Función para procesar nuevas filas que se agreguen dinámicamente
@@ -1728,11 +1795,21 @@ function debugThirdScroll() {
   console.log('=== FIN DEBUG TERCER SCROLL ===');
 }
 
+// Función para mostrar estadísticas de la cola de peticiones
+function showQueueStats() {
+  console.log(`Estadísticas de la cola:
+    - Peticiones en cola: ${requestQueue.length}
+    - Procesando cola: ${isProcessingQueue}
+    - Última petición: ${lastRequestTime ? new Date(lastRequestTime).toLocaleTimeString() : 'Nunca'}
+    - Intervalo mínimo: ${MIN_REQUEST_INTERVAL}ms`);
+}
+
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.cleanDateTimeCacheEntries = cleanDateTimeCacheEntries;
 window.showCacheStats = showCacheStats;
+window.showQueueStats = showQueueStats;
 // Función de debug específica para un usuario
 function debugSpecificUser(username) {
   console.log(`=== DEBUG USUARIO: ${username} ===`);
