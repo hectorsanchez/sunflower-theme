@@ -432,7 +432,43 @@ function getUserLocation(username) {
   return extractLocationFromDOM(username);
 }
 
-// Función para procesar todas las filas de la tabla (para paginación)
+// Función para procesar nuevas filas que se agreguen dinámicamente
+function processNewRows() {
+  if (!currentTable) return;
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  const newRows = [];
+  
+  // Encontrar filas que no tienen la columna de ubicación
+  allRows.forEach(row => {
+    if (!row.querySelector('.location-column-data')) {
+      newRows.push(row);
+    }
+  });
+  
+  if (newRows.length > 0) {
+    console.log(`Procesando ${newRows.length} nuevas filas del scroll infinito`);
+    
+    // Procesar las nuevas filas con delay para asegurar que el DOM esté renderizado
+    setTimeout(() => {
+      newRows.forEach((row, index) => {
+        // Procesar con delay escalonado para evitar problemas de rendimiento
+        setTimeout(() => {
+          addLocationCellToModernRow(row);
+        }, index * 100); // 100ms entre cada fila para scroll infinito
+      });
+      
+      // Actualizar después de un delay adicional
+      setTimeout(() => {
+        currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
+        updateFilterAndCounter();
+        console.log(`Scroll infinito: ${newRows.length} nuevas filas procesadas, total: ${currentDataRows.length}`);
+      }, newRows.length * 100 + 200);
+    }, 300); // Esperar 300ms antes de procesar
+  }
+}
+
+// Función para procesar todas las filas de la tabla (para carga inicial)
 function processAllRows() {
   if (!currentTable) return;
   
@@ -444,7 +480,7 @@ function processAllRows() {
     // Procesar con delay escalonado para evitar problemas de rendimiento
     setTimeout(() => {
       addLocationCellToModernRow(row);
-    }, index * 10); // 10ms entre cada fila (más rápido para paginación)
+    }, index * 10); // 10ms entre cada fila (más rápido para carga inicial)
   });
   
   // Actualizar después de un delay
@@ -496,76 +532,77 @@ function updateLocationOptions() {
   });
 }
 
-// Función para configurar paginación (sin scroll infinito)
-function setupPagination() {
+// Función para configurar scroll infinito mejorado
+function setupInfiniteScrollObserver() {
   if (!currentTable) return;
   
-  console.log('Configurando paginación en lugar de scroll infinito');
+  console.log('Configurando scroll infinito mejorado');
   
-  // Buscar el contenedor de paginación existente
-  const paginationContainer = document.querySelector('.pagination, .page-navigation, .nav-pills');
+  let processingTimeout = null;
+  let isProcessing = false;
+  let lastRowCount = 0;
   
-  if (paginationContainer) {
-    console.log('Paginación existente encontrada');
+  // Crear un observer para detectar cambios en el DOM
+  const observer = new MutationObserver(function(mutations) {
+    let shouldProcess = false;
     
-    // Agregar listener para cuando cambie la página
-    paginationContainer.addEventListener('click', function(event) {
-      const link = event.target.closest('a');
-      if (link && link.href) {
-        console.log('Navegación de página detectada, limpiando y reinicializando...');
-        
-        // Limpiar la columna de ubicación actual
-        cleanupLocationColumn();
-        
-        // Reinicializar después de un delay para que la nueva página se cargue
-        setTimeout(() => {
-          console.log('Reinicializando columna de ubicación para nueva página...');
-          addLocationColumn();
-        }, 1000);
+    mutations.forEach(function(mutation) {
+      // Verificar si se agregaron nuevos nodos
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // Verificar si es una fila de tabla o contiene filas
+            if (node.classList && (node.classList.contains('directory-table__row') || node.querySelector('.directory-table__row'))) {
+              shouldProcess = true;
+            }
+          }
+        });
       }
     });
-  } else {
-    console.log('No se encontró paginación existente, usando navegación estándar');
+    
+    if (shouldProcess && !isProcessing) {
+      // Limpiar timeout anterior si existe
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+      }
+      
+      // Usar setTimeout con delay más largo para asegurar que el DOM esté completamente renderizado
+      processingTimeout = setTimeout(() => {
+        const currentRowCount = currentTable.querySelectorAll('.directory-table__row, tr').length;
+        if (currentRowCount > lastRowCount) {
+          console.log(`Scroll infinito detectado: ${lastRowCount} → ${currentRowCount} filas, procesando nuevas filas...`);
+          lastRowCount = currentRowCount;
+          processNewRows();
+        }
+      }, 1500); // Aumentar a 1.5 segundos para asegurar renderizado completo
+    }
+  });
+  
+  // Observar cambios en el contenedor de la tabla
+  const tableContainer = currentTable.parentNode;
+  if (tableContainer) {
+    observer.observe(tableContainer, {
+      childList: true,
+      subtree: true
+    });
   }
+  
+  // También observar cambios directamente en la tabla
+  observer.observe(currentTable, {
+    childList: true,
+    subtree: true
+  });
+  
+  // Inicializar el contador de filas
+  lastRowCount = currentTable.querySelectorAll('.directory-table__row, tr').length;
+  
+  console.log(`MutationObserver configurado para scroll infinito mejorado con delay de 1.5 segundos (${lastRowCount} filas iniciales)`);
 }
 
-// Función para deshabilitar scroll infinito si está habilitado
-function disableInfiniteScroll() {
-  console.log('Deshabilitando scroll infinito si está habilitado');
-  
-  // Buscar y deshabilitar elementos de scroll infinito
-  const infiniteScrollElements = document.querySelectorAll('[data-infinite-scroll], .infinite-scroll, .load-more');
-  
-  infiniteScrollElements.forEach(element => {
-    element.style.display = 'none';
-    console.log('Elemento de scroll infinito deshabilitado');
-  });
-  
-  // Buscar botones de "Load More" y ocultarlos
-  const loadMoreButtons = document.querySelectorAll('button[data-load-more], .load-more-button, .show-more');
-  
-  loadMoreButtons.forEach(button => {
-    button.style.display = 'none';
-    console.log('Botón "Load More" deshabilitado');
-  });
-  
-  // Deshabilitar event listeners de scroll infinito
-  if (window.Discourse && window.Discourse.InfiniteScroll) {
-    try {
-      window.Discourse.InfiniteScroll.disable();
-      console.log('Discourse InfiniteScroll deshabilitado');
-    } catch (error) {
-      console.log('No se pudo deshabilitar InfiniteScroll:', error);
-    }
-  }
-}
 
 // Función para configurar manejadores de navegación
 function setupNavigationHandlers() {
-  console.log('Configurando manejadores de navegación para paginación');
-  
-  // Deshabilitar scroll infinito
-  disableInfiniteScroll();
+  console.log('Configurando manejadores de navegación para scroll infinito');
   
   // Ejecutar cuando cambia la URL (navegación SPA de Discourse)
   let currentUrl = window.location.href;
@@ -1041,8 +1078,8 @@ function addLocationFilter(table, dataRows) {
   // Actualizar opciones inmediatamente (ya que no hay API calls)
   updateLocationOptions();
   
-  // Configurar paginación en lugar de scroll infinito
-  setupPagination();
+  // Configurar scroll infinito mejorado
+  setupInfiniteScrollObserver();
   
   console.log('Filtro por ubicación agregado exitosamente');
 }
