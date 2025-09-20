@@ -207,18 +207,22 @@ function extractLocationFromDOM(username) {
     return cachedLocation;
   }
   
+  console.log(`DEBUG: Extrayendo ubicación para usuario ${username}`);
   let location = 'N/A';
   
   // Buscar enlaces de perfil del usuario en la página actual
   const userLinks = document.querySelectorAll(`a[href*="/u/${username}"]`);
+  console.log(`DEBUG: Encontrados ${userLinks.length} enlaces para usuario ${username}`);
   
   for (const link of userLinks) {
     // Buscar en el contexto del enlace por información de ubicación
     const userCard = link.closest('.user-card') || link.closest('.directory-table__row') || link.closest('tr');
     
     if (userCard) {
+      console.log(`DEBUG: userCard encontrado para usuario ${username}`);
       // Buscar en elementos de texto que puedan contener ubicación
       const textElements = userCard.querySelectorAll('span, div, td, .directory-table__cell');
+      console.log(`DEBUG: Encontrados ${textElements.length} elementos de texto para usuario ${username}`);
       
       for (const element of textElements) {
         const text = element.textContent.trim();
@@ -289,6 +293,8 @@ function extractLocationFromDOM(username) {
     // Forzar a N/A para evitar guardar "Read Time"
     location = 'N/A';
   }
+  
+  console.log(`DEBUG: Resultado final para usuario ${username}: "${location}"`);
   
   // Guardar en cache
   userLocationCache.set(username, location);
@@ -398,7 +404,8 @@ function setupInfiniteScrollObserver() {
     
     if (shouldProcess) {
       // Usar setTimeout para evitar procesar demasiado frecuentemente
-      setTimeout(processNewRows, 100);
+      // Aumentar delay para asegurar que el DOM esté completamente renderizado
+      setTimeout(processNewRows, 500);
     }
   });
   
@@ -431,6 +438,11 @@ function isValidLocation(text) {
     return false;
   }
   
+  // Debug para ver qué texto se está evaluando
+  if (text.length > 2 && text.length < 50) {
+    console.log(`DEBUG: Evaluando texto: "${text}"`);
+  }
+  
   // Lista de palabras que NO son ubicaciones
   const invalidWords = [
     'read', 'time', 'read time', 'joined', 'posts', 'topics', 'likes', 
@@ -459,6 +471,7 @@ function isValidLocation(text) {
   // Verificar si contiene palabras inválidas
   for (const invalidWord of invalidWords) {
     if (lowerText.includes(invalidWord)) {
+      console.log(`DEBUG: Texto "${text}" rechazado por palabra inválida: "${invalidWord}"`);
       return false;
     }
   }
@@ -473,14 +486,17 @@ function isValidLocation(text) {
       text.match(/\d{4}-\d{2}-\d{2}/) || // fechas
       text.match(/\d{2}:\d{2}/) || // horas
       text.match(/^\d+[a-z]+\d+$/)) { // patrones como "2days"
+    console.log(`DEBUG: Texto "${text}" rechazado por patrón inválido`);
     return false;
   }
   
   // Debe tener al menos una letra mayúscula (países suelen empezar con mayúscula)
   if (!/[A-Z]/.test(text)) {
+    console.log(`DEBUG: Texto "${text}" rechazado por no tener mayúscula`);
     return false;
   }
   
+  console.log(`DEBUG: Texto "${text}" ACEPTADO como ubicación válida`);
   return true;
 }
 
