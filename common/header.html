@@ -527,6 +527,8 @@ loadCacheFromStorage();
 cleanInvalidCacheEntries();
 // Limpiar entradas N/A del cache para permitir re-extracción
 cleanNACacheEntries();
+// Limpiar entradas de fecha/hora del cache
+cleanDateTimeCacheEntries();
 
 // Función para validar si un texto es una ubicación válida
 function isValidLocation(text) {
@@ -553,7 +555,8 @@ function isValidLocation(text) {
     'reported', 'banned', 'muted', 'warned', 'restricted', 'limited',
     'days', 'hours', 'minutes', 'seconds', 'ago', 'today', 'yesterday',
     'week', 'month', 'year', 'january', 'february', 'march', 'april',
-    'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'
+    'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+    'am', 'pm', 'morning', 'afternoon', 'evening', 'night', 'midnight', 'noon'
   ];
   
   const lowerText = text.toLowerCase();
@@ -578,8 +581,17 @@ function isValidLocation(text) {
       text.match(/^\d+[a-z]+\d+$/) || // patrones como "2days"
       text.match(/^< \d+[a-z]+$/) || // patrones como "< 1m"
       text.match(/^\d+[a-z]+$/) || // patrones como "2h", "3mon"
-      text.match(/^[a-z]+\d+[a-z]+$/)) { // patrones como "mar2h"
-    console.log(`DEBUG: Texto "${text}" rechazado por patrón inválido`);
+      text.match(/^[a-z]+\d+[a-z]+$/) || // patrones como "mar2h"
+      text.match(/^\d{4} \d{1,2}:\d{2} [ap]m$/) || // patrones como "2025 8:56 pm"
+      text.match(/^[A-Za-z]{3} \d{1,2}, \d{4} \d{1,2}:\d{2} [ap]m$/) || // patrones como "Sep 19, 2025 8:56 pm"
+      text.match(/^[A-Za-z]{3} \d{1,2}, \d{4}$/) || // patrones como "Sep 19, 2025"
+      text.match(/^\d{1,2}:\d{2} [ap]m$/) || // patrones como "8:56 pm"
+      text.match(/^\d{4}$/) || // solo años como "2025"
+      text.match(/^\d{1,2}:\d{2}$/) || // patrones como "8:56"
+      text.match(/^[A-Za-z]{3} \d{1,2}$/) || // patrones como "Sep 19"
+      text.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/) || // patrones como "19/09/2025"
+      text.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) { // patrones como "2025-09-19"
+    console.log(`DEBUG: Texto "${text}" rechazado por patrón inválido (fecha/hora)`);
     return false;
   }
   
@@ -1387,6 +1399,38 @@ function cleanNACacheEntries() {
   }
 }
 
+// Función para limpiar entradas del cache que contengan fechas/horas
+function cleanDateTimeCacheEntries() {
+  let cleaned = 0;
+  const dateTimePatterns = [
+    /^\d{4} \d{1,2}:\d{2} [ap]m$/, // "2025 8:56 pm"
+    /^[A-Za-z]{3} \d{1,2}, \d{4} \d{1,2}:\d{2} [ap]m$/, // "Sep 19, 2025 8:56 pm"
+    /^[A-Za-z]{3} \d{1,2}, \d{4}$/, // "Sep 19, 2025"
+    /^\d{1,2}:\d{2} [ap]m$/, // "8:56 pm"
+    /^\d{4}$/, // "2025"
+    /^\d{1,2}:\d{2}$/, // "8:56"
+    /^[A-Za-z]{3} \d{1,2}$/, // "Sep 19"
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/, // "19/09/2025"
+    /^\d{4}-\d{1,2}-\d{1,2}$/ // "2025-09-19"
+  ];
+  
+  for (const [username, location] of userLocationCache.entries()) {
+    for (const pattern of dateTimePatterns) {
+      if (pattern.test(location)) {
+        userLocationCache.delete(username);
+        cleaned++;
+        console.log(`Limpiada entrada de fecha/hora del cache: ${username} -> "${location}"`);
+        break;
+      }
+    }
+  }
+  
+  if (cleaned > 0) {
+    saveCacheToStorage();
+    console.log(`Limpiadas ${cleaned} entradas de fecha/hora del cache`);
+  }
+}
+
 // Función para mostrar estadísticas del cache (útil para debugging)
 function showCacheStats() {
   const cacheSize = userLocationCache.size;
@@ -1456,6 +1500,7 @@ function debugUserDOM(username) {
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.cleanNACacheEntries = cleanNACacheEntries;
+window.cleanDateTimeCacheEntries = cleanDateTimeCacheEntries;
 window.showCacheStats = showCacheStats;
 window.debugUserDOM = debugUserDOM;
 
