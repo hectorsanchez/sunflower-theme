@@ -223,11 +223,6 @@ function extractLocationFromDOM(username) {
       for (const element of textElements) {
         const text = element.textContent.trim();
         
-        // Debug específico para "Read Time"
-        if (text === 'Read Time') {
-          console.log(`DEBUG: Encontrado "Read Time" para usuario ${username}, elemento:`, element);
-        }
-        
         // Buscar patrones de ubicación comunes
         if (isValidLocation(text)) {
           // Verificar si es un país conocido
@@ -255,17 +250,12 @@ function extractLocationFromDOM(username) {
       for (const cell of cells) {
         const cellText = cell.textContent.trim();
         
-        // Debug específico para "Read Time"
-        if (cellText === 'Read Time') {
-          console.log(`DEBUG: Encontrado "Read Time" en celda para usuario ${username}, celda:`, cell);
-        }
-        
         // Buscar patrones de ubicación en las celdas
         if (isValidLocation(cellText)) {
           const country = extractCountryFromLocation(cellText);
           if (country !== 'Sin ubicación') {
             location = country;
-              break;
+            break;
           }
         }
       }
@@ -294,7 +284,10 @@ function extractLocationFromDOM(username) {
       
   // Debug si se está guardando "Read Time"
   if (location === 'Read Time') {
-    console.log(`DEBUG: Guardando "Read Time" en cache para usuario ${username}`);
+    console.log(`DEBUG: ERROR - Se está guardando "Read Time" en cache para usuario ${username}`);
+    console.log(`DEBUG: Esto no debería pasar si isValidLocation funciona correctamente`);
+    // Forzar a N/A para evitar guardar "Read Time"
+    location = 'N/A';
   }
   
   // Guardar en cache
@@ -457,6 +450,7 @@ function isValidLocation(text) {
   
   // Verificación específica para "Read Time"
   if (text === 'Read Time' || text.toLowerCase() === 'read time') {
+    console.log(`DEBUG: "Read Time" detectado y rechazado por isValidLocation`);
     return false;
   }
   
