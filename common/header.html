@@ -162,6 +162,13 @@ function addEventListenerSafe(element, event, handler) {
 // Cache para almacenar las ubicaciones de los usuarios (solo memoria, sin API calls)
 const userLocationCache = new Map();
 
+// Variables globales para el manejo de scroll infinito
+let currentTable = null;
+let currentDataRows = [];
+let locationFilter = null;
+let filterCounter = null;
+let filterSelect = null;
+
 // Cargar cache desde localStorage al iniciar
 function loadCacheFromStorage() {
   try {
@@ -312,6 +319,124 @@ function getUserLocation(username) {
   return extractLocationFromDOM(username);
 }
 
+// Función para procesar nuevas filas que se agreguen dinámicamente
+function processNewRows() {
+  if (!currentTable) return;
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  const newRows = [];
+  
+  // Encontrar filas que no tienen la columna de ubicación
+  allRows.forEach(row => {
+    if (!row.querySelector('.location-column-data')) {
+      newRows.push(row);
+    }
+  });
+  
+  if (newRows.length > 0) {
+    console.log(`Procesando ${newRows.length} nuevas filas`);
+    
+    // Procesar las nuevas filas
+    newRows.forEach(row => {
+      addLocationCellToModernRow(row);
+    });
+    
+    // Actualizar la lista de filas de datos
+    currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
+    
+    // Actualizar el contador y filtro
+    updateFilterAndCounter();
+  }
+}
+
+// Función para actualizar el filtro y contador
+function updateFilterAndCounter() {
+  if (!currentTable || !filterCounter || !filterSelect) return;
+  
+  // Actualizar contador
+  const visibleRows = currentTable.querySelectorAll('.directory-table__row:not([style*="display: none"])');
+  const totalRows = currentDataRows.length;
+  filterCounter.textContent = `${visibleRows.length} of ${totalRows} users`;
+  
+  // Actualizar opciones del filtro
+  updateLocationOptions();
+}
+
+// Función para actualizar opciones del filtro
+function updateLocationOptions() {
+  if (!currentTable || !filterSelect) return;
+  
+  const locations = new Set();
+  const locationCells = currentTable.querySelectorAll('.location-column-data');
+  
+  locationCells.forEach(cell => {
+    const location = cell.textContent.trim();
+    if (location && location !== 'N/A' && location !== 'Sin ubicación') {
+      locations.add(location);
+    }
+  });
+  
+  // Limpiar opciones existentes (excepto las primeras dos)
+  while (filterSelect.children.length > 2) {
+    filterSelect.removeChild(filterSelect.lastChild);
+  }
+  
+  // Agregar opciones de ubicaciones
+  const sortedLocations = Array.from(locations).sort();
+  sortedLocations.forEach(location => {
+    const option = document.createElement('option');
+    option.value = location;
+    option.textContent = location;
+    filterSelect.appendChild(option);
+  });
+}
+
+// Función para configurar el MutationObserver para detectar scroll infinito
+function setupInfiniteScrollObserver() {
+  if (!currentTable) return;
+  
+  // Crear un observer para detectar cambios en el DOM
+  const observer = new MutationObserver(function(mutations) {
+    let shouldProcess = false;
+    
+    mutations.forEach(function(mutation) {
+      // Verificar si se agregaron nuevos nodos
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // Verificar si es una fila de tabla o contiene filas
+            if (node.classList && (node.classList.contains('directory-table__row') || node.querySelector('.directory-table__row'))) {
+              shouldProcess = true;
+            }
+          }
+        });
+      }
+    });
+    
+    if (shouldProcess) {
+      // Usar setTimeout para evitar procesar demasiado frecuentemente
+      setTimeout(processNewRows, 100);
+    }
+  });
+  
+  // Observar cambios en el contenedor de la tabla
+  const tableContainer = currentTable.parentNode;
+  if (tableContainer) {
+    observer.observe(tableContainer, {
+      childList: true,
+      subtree: true
+    });
+  }
+  
+  // También observar cambios directamente en la tabla
+  observer.observe(currentTable, {
+    childList: true,
+    subtree: true
+  });
+  
+  console.log('MutationObserver configurado para scroll infinito');
+}
+
 // Inicializar cache al cargar
 loadCacheFromStorage();
 
@@ -388,7 +513,9 @@ async function addLocationColumn() {
 
 // Función para agregar columna a tabla moderna de Discourse
 function addColumnToModernTable(table, columnHeaders, dataRows) {
-
+  // Guardar referencias globales para el manejo de scroll infinito
+  currentTable = table;
+  currentDataRows = dataRows;
   
   // Crear encabezado de columna
   const locationHeader = document.createElement('div');
@@ -585,38 +712,15 @@ function addLocationFilter(table, dataRows) {
     font-size: 14px;
   `;
   
+  // Guardar referencias globales
+  filterCounter = counter;
+  filterSelect = select;
+  
   // Función para actualizar el contador
   function updateCounter() {
     const visibleRows = table.querySelectorAll('.directory-table__row:not([style*="display: none"])');
-    const totalRows = dataRows.length;
+    const totalRows = currentDataRows.length;
     counter.textContent = `${visibleRows.length} of ${totalRows} users`;
-  }
-  
-  // Función para actualizar el filtro con nuevas ubicaciones
-  function updateLocationOptions() {
-    const locations = new Set();
-    const locationCells = table.querySelectorAll('.location-column-data');
-    
-    locationCells.forEach(cell => {
-      const location = cell.textContent.trim();
-      if (location && location !== 'N/A' && location !== 'Sin ubicación') {
-        locations.add(location);
-      }
-    });
-    
-    // Limpiar opciones existentes (excepto las primeras dos)
-    while (select.children.length > 2) {
-      select.removeChild(select.lastChild);
-    }
-    
-    // Agregar opciones de ubicaciones
-    const sortedLocations = Array.from(locations).sort();
-    sortedLocations.forEach(location => {
-      const option = document.createElement('option');
-      option.value = location;
-      option.textContent = location;
-      select.appendChild(option);
-    });
   }
   
   // Función para filtrar
@@ -662,6 +766,9 @@ function addLocationFilter(table, dataRows) {
   
   // Actualizar opciones inmediatamente (ya que no hay API calls)
   updateLocationOptions();
+  
+  // Configurar MutationObserver para detectar nuevas filas
+  setupInfiniteScrollObserver();
   
   console.log('Filtro por ubicación agregado exitosamente');
 }
@@ -1056,6 +1163,13 @@ function cleanupLocationColumn() {
   existingCells.forEach(cell => cell.remove());
   if (existingStyle) existingStyle.remove();
   if (existingFilter) existingFilter.remove();
+  
+  // Resetear variables globales
+  currentTable = null;
+  currentDataRows = [];
+  locationFilter = null;
+  filterCounter = null;
+  filterSelect = null;
 }
 
 // Función para limpiar el cache (útil para debugging o cuando se quiera refrescar datos)
