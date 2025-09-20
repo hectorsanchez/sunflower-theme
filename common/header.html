@@ -427,9 +427,55 @@ function findLocationInAttributes(username) {
   return null;
 }
 
-// Función para obtener ubicación (ahora sin API calls)
-function getUserLocation(username) {
-  return extractLocationFromDOM(username);
+// Función para obtener ubicación desde el perfil del usuario
+async function getUserLocation(username) {
+  // Primero intentar extraer del DOM
+  const domLocation = extractLocationFromDOM(username);
+  
+  // Si no se encuentra en el DOM, intentar desde el perfil
+  if (domLocation === 'N/A') {
+    console.log(`Ubicación no encontrada en DOM para ${username}, intentando desde perfil...`);
+    try {
+      const profileLocation = await extractLocationFromProfile(username);
+      if (profileLocation && profileLocation !== 'N/A') {
+        console.log(`Ubicación encontrada en perfil para ${username}: "${profileLocation}"`);
+        return profileLocation;
+      }
+    } catch (error) {
+      console.log(`Error obteniendo ubicación desde perfil para ${username}:`, error);
+    }
+  }
+  
+  return domLocation;
+}
+
+// Función para extraer ubicación desde el perfil del usuario
+async function extractLocationFromProfile(username) {
+  try {
+    // Hacer una llamada al perfil del usuario
+    const response = await fetch(`/u/${username}.json`);
+    if (!response.ok) {
+      console.log(`Error en respuesta del perfil para ${username}: ${response.status}`);
+      return 'N/A';
+    }
+    
+    const userData = await response.json();
+    console.log(`Datos del perfil para ${username}:`, userData);
+    
+    // Buscar la ubicación en los datos del usuario
+    if (userData.user && userData.user.location) {
+      const location = userData.user.location;
+      console.log(`Ubicación encontrada en perfil para ${username}: "${location}"`);
+      return extractCountryFromLocation(location);
+    }
+    
+    console.log(`No se encontró ubicación en perfil para ${username}`);
+    return 'N/A';
+    
+  } catch (error) {
+    console.log(`Error en fetch del perfil para ${username}:`, error);
+    return 'N/A';
+  }
 }
 
 // Función para procesar nuevas filas que se agreguen dinámicamente
@@ -450,13 +496,14 @@ function processNewRows() {
     console.log(`Procesando ${newRows.length} nuevas filas del scroll infinito`);
     
     // Procesar las nuevas filas con delay para asegurar que el DOM esté renderizado
-    setTimeout(() => {
-      newRows.forEach((row, index) => {
+    setTimeout(async () => {
+      for (let index = 0; index < newRows.length; index++) {
+        const row = newRows[index];
         // Procesar con delay escalonado para evitar problemas de rendimiento
-        setTimeout(() => {
-          addLocationCellToModernRow(row);
+        setTimeout(async () => {
+          await addLocationCellToModernRow(row);
         }, index * 100); // 100ms entre cada fila para scroll infinito
-      });
+      }
       
       // Actualizar después de un delay adicional
       setTimeout(() => {
@@ -478,8 +525,8 @@ function processAllRows() {
   // Procesar todas las filas
   allRows.forEach((row, index) => {
     // Procesar con delay escalonado para evitar problemas de rendimiento
-    setTimeout(() => {
-      addLocationCellToModernRow(row);
+    setTimeout(async () => {
+      await addLocationCellToModernRow(row);
     }, index * 10); // 10ms entre cada fila (más rápido para carga inicial)
   });
   
@@ -891,7 +938,7 @@ function addColumnToModernTable(table, columnHeaders, dataRows) {
 }
 
 // Función para agregar celda de ubicación a una fila moderna
-function addLocationCellToModernRow(row) {
+async function addLocationCellToModernRow(row) {
   const locationCell = document.createElement('div');
   locationCell.className = 'directory-table__cell location-column-data';
   locationCell.setAttribute('role', 'cell');
@@ -938,22 +985,29 @@ function addLocationCellToModernRow(row) {
   }
   
   if (username) {
-    // Obtener ubicación directamente del DOM (sin API calls)
-    const location = getUserLocation(username);
-    
+    try {
+      // Obtener ubicación (ahora async)
+      const location = await getUserLocation(username);
+      
       locationCell.textContent = location;
       locationCell.style.fontStyle = 'normal';
       locationCell.style.color = '#40312a';
-    locationCell.style.fontSize = '0.9em';
-      
-      // Aplicar estilos especiales para ubicaciones válidas
-    if (location !== 'N/A' && location !== 'Sin ubicación') {
-        locationCell.style.fontWeight = '500';
-        locationCell.style.color = '#8A4A19';
-    } else {
+      locationCell.style.fontSize = '0.9em';
+        
+        // Aplicar estilos especiales para ubicaciones válidas
+      if (location !== 'N/A' && location !== 'Sin ubicación') {
+          locationCell.style.fontWeight = '500';
+          locationCell.style.color = '#8A4A19';
+      } else {
+        locationCell.style.color = '#999';
+        locationCell.style.fontStyle = 'italic';
+        }
+    } catch (error) {
+      console.log(`Error obteniendo ubicación para ${username}:`, error);
+      locationCell.textContent = 'N/A';
       locationCell.style.color = '#999';
       locationCell.style.fontStyle = 'italic';
-      }
+    }
   } else {
     locationCell.textContent = 'N/A';
     locationCell.style.color = '#999';
