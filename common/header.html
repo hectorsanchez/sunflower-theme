@@ -218,6 +218,11 @@ function extractLocationFromDOM(username) {
       for (const element of textElements) {
         const text = element.textContent.trim();
         
+        // Debug específico para "Read Time"
+        if (text === 'Read Time') {
+          console.log(`DEBUG: Encontrado "Read Time" para usuario ${username}, elemento:`, element);
+        }
+        
         // Buscar patrones de ubicación comunes
         if (isValidLocation(text)) {
           // Verificar si es un país conocido
@@ -235,30 +240,29 @@ function extractLocationFromDOM(username) {
   
   // Si no se encontró en el DOM, intentar extraer de información ya disponible
   if (location === 'N/A') {
-    // Buscar en elementos de la tabla que puedan tener información de ubicación
-    const tableRows = document.querySelectorAll('.directory-table__row, tr');
+    // Buscar específicamente en la fila del usuario
+    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
     
-    for (const row of tableRows) {
-      const usernameInRow = row.querySelector(`a[href*="/u/${username}"]`);
-      if (usernameInRow) {
-        // Buscar en todas las celdas de la fila
-        const cells = row.querySelectorAll('.directory-table__cell, td');
+    if (userRow) {
+      // Buscar en todas las celdas de la fila específica del usuario
+      const cells = userRow.querySelectorAll('.directory-table__cell, td');
+      
+      for (const cell of cells) {
+        const cellText = cell.textContent.trim();
         
-        for (const cell of cells) {
-          const cellText = cell.textContent.trim();
-          
-          // Buscar patrones de ubicación en las celdas
-          if (isValidLocation(cellText)) {
-            
-            const country = extractCountryFromLocation(cellText);
-            if (country !== 'Sin ubicación') {
-              location = country;
-              break;
-            }
-          }
+        // Debug específico para "Read Time"
+        if (cellText === 'Read Time') {
+          console.log(`DEBUG: Encontrado "Read Time" en celda para usuario ${username}, celda:`, cell);
         }
         
-        if (location !== 'N/A') break;
+        // Buscar patrones de ubicación en las celdas
+        if (isValidLocation(cellText)) {
+          const country = extractCountryFromLocation(cellText);
+          if (country !== 'Sin ubicación') {
+            location = country;
+            break;
+          }
+        }
       }
     }
   }
@@ -433,8 +437,16 @@ function isValidLocation(text) {
     'search', 'filter', 'sort', 'order', 'date', 'created', 'updated',
     'deleted', 'archived', 'hidden', 'private', 'public', 'draft',
     'published', 'pending', 'approved', 'rejected', 'flagged', 'reported',
-    'banned', 'muted', 'warned', 'suspended', 'restricted', 'limited'
+    'banned', 'muted', 'warned', 'suspended', 'restricted', 'limited',
+    'days', 'hours', 'minutes', 'seconds', 'ago', 'today', 'yesterday',
+    'week', 'month', 'year', 'january', 'february', 'march', 'april',
+    'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'
   ];
+  
+  // Verificación específica para "Read Time"
+  if (text === 'Read Time' || text.toLowerCase() === 'read time') {
+    return false;
+  }
   
   const lowerText = text.toLowerCase();
   
