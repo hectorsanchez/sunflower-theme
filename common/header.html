@@ -1175,23 +1175,56 @@ function addLocationFilter(table, dataRows) {
   
   // Función para filtrar
   function filterByLocation(selectedLocation) {
-    console.log(`Filtrando por ubicación: ${selectedLocation}`);
+    console.log(`Filtrando por ubicación: "${selectedLocation}"`);
+    
+    let visibleCount = 0;
     
     dataRows.forEach(row => {
       const locationCell = row.querySelector('.location-column-data');
       if (locationCell) {
         const cellLocation = locationCell.textContent.trim();
+        let shouldShow = false;
         
         if (selectedLocation === 'all') {
-          row.style.display = '';
+          shouldShow = true;
         } else if (selectedLocation === 'no-location') {
-          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Sin ubicación') ? '' : 'none';
+          shouldShow = (cellLocation === 'N/A' || cellLocation === 'Sin ubicación' || cellLocation === '...');
         } else {
-          row.style.display = (cellLocation === selectedLocation) ? '' : 'none';
+          // Comparación más robusta para ubicaciones
+          const cellLocationLower = cellLocation.toLowerCase();
+          const selectedLocationLower = selectedLocation.toLowerCase();
+          
+          // Comparación exacta
+          shouldShow = (cellLocationLower === selectedLocationLower);
+          
+          // Si no coincide exactamente, verificar si contiene la ubicación seleccionada
+          if (!shouldShow && cellLocationLower.includes(selectedLocationLower)) {
+            shouldShow = true;
+          }
+          
+          // Verificar casos especiales (ej: "Spain" vs "spain")
+          if (!shouldShow) {
+            const cellWords = cellLocationLower.split(/[\s,.-]+/);
+            const selectedWords = selectedLocationLower.split(/[\s,.-]+/);
+            
+            // Si alguna palabra de la ubicación seleccionada está en la celda
+            shouldShow = selectedWords.some(word => 
+              word.length > 2 && cellWords.some(cellWord => cellWord.includes(word))
+            );
+          }
+        }
+        
+        row.style.display = shouldShow ? '' : 'none';
+        if (shouldShow) visibleCount++;
+        
+        // Debug para las primeras filas
+        if (visibleCount <= 5) {
+          console.log(`Fila ${visibleCount}: "${cellLocation}" ${shouldShow ? 'VISIBLE' : 'OCULTA'} (filtro: "${selectedLocation}")`);
         }
       }
     });
     
+    console.log(`Filtro aplicado: ${visibleCount} usuarios visibles de ${dataRows.length} total`);
     updateCounter();
   }
   
@@ -1873,9 +1906,69 @@ function debugSpecificUser(username) {
   console.log(`=== FIN DEBUG USUARIO: ${username} ===`);
 }
 
+// Función de debug para el filtro
+function debugFilter(selectedLocation) {
+  console.log(`=== DEBUG FILTRO: "${selectedLocation}" ===`);
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  console.log(`Total de filas: ${allRows.length}`);
+  
+  const locationStats = {};
+  let visibleCount = 0;
+  
+  allRows.forEach((row, index) => {
+    const locationCell = row.querySelector('.location-column-data');
+    if (locationCell) {
+      const cellLocation = locationCell.textContent.trim();
+      
+      // Contar estadísticas
+      if (!locationStats[cellLocation]) {
+        locationStats[cellLocation] = 0;
+      }
+      locationStats[cellLocation]++;
+      
+      // Verificar si debería ser visible con el filtro actual
+      let shouldShow = false;
+      
+      if (selectedLocation === 'all') {
+        shouldShow = true;
+      } else if (selectedLocation === 'no-location') {
+        shouldShow = (cellLocation === 'N/A' || cellLocation === 'Sin ubicación' || cellLocation === '...');
+      } else {
+        const cellLocationLower = cellLocation.toLowerCase();
+        const selectedLocationLower = selectedLocation.toLowerCase();
+        
+        shouldShow = (cellLocationLower === selectedLocationLower) || 
+                    cellLocationLower.includes(selectedLocationLower);
+      }
+      
+      if (shouldShow) visibleCount++;
+      
+      // Mostrar las primeras 10 filas para debug
+      if (index < 10) {
+        console.log(`Fila ${index}: "${cellLocation}" ${shouldShow ? 'VISIBLE' : 'OCULTA'}`);
+      }
+    }
+  });
+  
+  console.log(`Usuarios visibles con filtro "${selectedLocation}": ${visibleCount}`);
+  console.log('Estadísticas de ubicaciones:');
+  Object.entries(locationStats).forEach(([location, count]) => {
+    console.log(`  "${location}": ${count} usuarios`);
+  });
+  
+  console.log(`=== FIN DEBUG FILTRO ===`);
+}
+
 window.debugUserDOM = debugUserDOM;
 window.debugThirdScroll = debugThirdScroll;
 window.debugSpecificUser = debugSpecificUser;
+window.debugFilter = debugFilter;
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
