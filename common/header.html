@@ -285,20 +285,55 @@ function findLocationInProfile(container, username) {
     if (element) {
       const text = element.textContent.trim();
       if (isValidLocationSimple(text)) {
+        console.log(`Ubicación encontrada en selector ${selector}: "${text}"`);
         return extractCountryFromLocation(text);
       }
     }
   }
   
-  // Buscar en todo el texto del contenedor
-  const allText = container.textContent;
-  const locationMatch = allText.match(/\b([A-Z][a-z]+(?: [A-Z][a-z]+)*)\b/g);
+  // NO buscar en todo el texto del contenedor ya que captura texto de UI
+  // En su lugar, buscar solo en elementos específicos que podrían contener ubicación
+  const potentialLocationElements = container.querySelectorAll('span, div, p, td');
   
-  if (locationMatch) {
-    for (const match of locationMatch) {
-      if (isValidLocationSimple(match)) {
-        return extractCountryFromLocation(match);
-      }
+  for (const element of potentialLocationElements) {
+    const text = element.textContent.trim();
+    
+    // Saltar texto que obviamente no es ubicación
+    if (text.length < 3 || 
+        text.length > 50 ||
+        text === username ||
+        text.toLowerCase().includes('last emailed') ||
+        text.toLowerCase().includes('read time') ||
+        text.toLowerCase().includes('seen') ||
+        text.toLowerCase().includes('topics viewed') ||
+        text.toLowerCase().includes('posts read') ||
+        text.toLowerCase().includes('created') ||
+        text.toLowerCase().includes('status') ||
+        text.toLowerCase().includes('joined') ||
+        text.toLowerCase().includes('posts') ||
+        text.toLowerCase().includes('topics') ||
+        text.toLowerCase().includes('likes') ||
+        text.toLowerCase().includes('active') ||
+        text.toLowerCase().includes('admin') ||
+        text.toLowerCase().includes('moderator') ||
+        text.toLowerCase().includes('user') ||
+        text.toLowerCase().includes('member') ||
+        text.toLowerCase().includes('online') ||
+        text.toLowerCase().includes('offline') ||
+        text.toLowerCase().includes('away') ||
+        text.includes('@') ||
+        text.includes('http') ||
+        text.includes('www') ||
+        text.match(/^\d+$/) ||
+        text.match(/^\d+[a-z]+$/) ||
+        text.match(/\d{4}-\d{2}-\d{2}/) ||
+        text.match(/\d{2}:\d{2}/)) {
+      continue;
+    }
+    
+    if (isValidLocationSimple(text)) {
+      console.log(`Ubicación válida encontrada en elemento: "${text}"`);
+      return extractCountryFromLocation(text);
     }
   }
   
@@ -542,6 +577,33 @@ function isValidLocationSimple(text) {
     return false;
   }
   
+  const lowerText = text.toLowerCase();
+  
+  // Rechazar específicamente texto de UI común
+  const uiTexts = [
+    'last emailed', 'read time', 'seen', 'topics viewed', 'posts read',
+    'created', 'status', 'joined', 'posts', 'topics', 'likes', 'active',
+    'admin', 'moderator', 'user', 'member', 'online', 'offline', 'away',
+    'busy', 'do not disturb', 'profile', 'avatar', 'email', 'username',
+    'name', 'title', 'role', 'permissions', 'settings', 'preferences',
+    'account', 'login', 'logout', 'search', 'filter', 'sort', 'order',
+    'date', 'updated', 'deleted', 'archived', 'hidden', 'private', 'public',
+    'draft', 'published', 'pending', 'approved', 'rejected', 'flagged',
+    'reported', 'banned', 'muted', 'warned', 'restricted', 'limited',
+    'days', 'hours', 'minutes', 'seconds', 'ago', 'today', 'yesterday',
+    'week', 'month', 'year', 'january', 'february', 'march', 'april',
+    'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+    'am', 'pm', 'morning', 'afternoon', 'evening', 'night', 'midnight', 'noon'
+  ];
+  
+  // Verificar si contiene texto de UI
+  for (const uiText of uiTexts) {
+    if (lowerText === uiText || lowerText.includes(uiText)) {
+      console.log(`Texto rechazado por ser UI: "${text}" (contiene: "${uiText}")`);
+      return false;
+    }
+  }
+  
   // Lista de países comunes (expandible)
   const commonCountries = [
     'Spain', 'Italy', 'France', 'Germany', 'United Kingdom', 'Portugal', 'Netherlands',
@@ -572,11 +634,10 @@ function isValidLocationSimple(text) {
     'Qatar', 'Bahrain', 'Kuwait', 'Iraq', 'Afghanistan', 'Uzbekistan', 'Tajikistan'
   ];
   
-  const lowerText = text.toLowerCase();
-  
   // Verificar si es un país conocido
   for (const country of commonCountries) {
     if (lowerText === country.toLowerCase() || lowerText.includes(country.toLowerCase())) {
+      console.log(`País conocido encontrado: "${text}"`);
       return true;
     }
   }
@@ -597,9 +658,11 @@ function isValidLocationSimple(text) {
       !text.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i) && // No debe empezar con mes
       !text.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) && // No días de la semana
       !text.match(/(today|yesterday|tomorrow)/i)) { // No palabras temporales
+    console.log(`Patrón de ubicación válido: "${text}"`);
     return true;
   }
   
+  console.log(`Texto rechazado por no cumplir criterios: "${text}"`);
   return false;
 }
 
