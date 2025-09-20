@@ -197,14 +197,19 @@ function saveCacheToStorage() {
 
 // Función para extraer ubicación directamente del DOM sin llamadas a la API
 function extractLocationFromDOM(username) {
-  // Verificar cache primero
+  // Verificar cache primero, pero re-extraer si es "N/A" (podría ser un error previo)
   if (userLocationCache.has(username)) {
     const cachedLocation = userLocationCache.get(username);
     // Debug específico para "Read Time" en cache
     if (cachedLocation === 'Read Time') {
       console.log(`DEBUG: "Read Time" encontrado en cache para usuario ${username}`);
     }
-    return cachedLocation;
+    // Si el cache tiene "N/A", intentar re-extraer
+    if (cachedLocation === 'N/A') {
+      console.log(`DEBUG: Re-extraendo ubicación para usuario ${username} (tenía N/A en cache)`);
+    } else {
+      return cachedLocation;
+    }
   }
   
   console.log(`DEBUG: Extrayendo ubicación para usuario ${username}`);
@@ -1260,6 +1265,22 @@ function cleanInvalidCacheEntries() {
   }
 }
 
+// Función para limpiar entradas "N/A" del cache y forzar re-extracción
+function cleanNACacheEntries() {
+  let cleaned = 0;
+  for (const [username, location] of userLocationCache.entries()) {
+    if (location === 'N/A') {
+      userLocationCache.delete(username);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    saveCacheToStorage();
+    console.log(`Limpiadas ${cleaned} entradas N/A del cache para re-extracción`);
+  }
+}
+
 // Función para mostrar estadísticas del cache (útil para debugging)
 function showCacheStats() {
   const cacheSize = userLocationCache.size;
@@ -1275,6 +1296,7 @@ function showCacheStats() {
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
+window.cleanNACacheEntries = cleanNACacheEntries;
 window.showCacheStats = showCacheStats;
 
 // Función principal que se ejecuta cuando Discourse esté listo
