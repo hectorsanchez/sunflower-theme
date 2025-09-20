@@ -68,7 +68,7 @@ function findUsersTable() {
     try {
       const element = document.querySelector(selector);
       if (element) {
-        console.log(`✅ Tabla encontrada con selector: ${selector}`);
+        console.log(`Tabla encontrada con selector: ${selector}`);
         return element;
       }
     } catch (e) {
@@ -94,7 +94,7 @@ function findUsersTable() {
     }
     
     if (hasUsername && hasEmail) {
-      console.log('✅ Tabla encontrada por contenido (username + email)');
+      console.log('Tabla encontrada por contenido (username + email)');
       return table;
     }
   }
@@ -128,20 +128,20 @@ function analyzeTableStructure(table) {
   const tbody = table.querySelector('tbody');
   
   if (thead && tbody) {
-    console.log('✅ Estructura tradicional: thead + tbody');
+    console.log('Estructura tradicional: thead + tbody');
     return { type: 'traditional', thead, tbody };
   }
   
   // Si no tiene thead/tbody, buscar filas directamente
   const allRows = table.querySelectorAll('tr');
   if (allRows.length > 0) {
-    console.log(`📊 Encontradas ${allRows.length} filas en la tabla`);
+    console.log(`Encontradas ${allRows.length} filas en la tabla`);
     
     // La primera fila suele ser el encabezado
     const headerRow = allRows[0];
     const dataRows = Array.from(allRows).slice(1);
     
-    console.log('✅ Estructura alternativa: filas directas');
+    console.log('Estructura alternativa: filas directas');
     return { type: 'alternative', headerRow, dataRows, allRows };
   }
   
@@ -159,21 +159,8 @@ function addEventListenerSafe(element, event, handler) {
   }
 }
 
-// Cache para almacenar las ubicaciones de los usuarios (persistente)
+// Cache para almacenar las ubicaciones de los usuarios (solo memoria, sin API calls)
 const userLocationCache = new Map();
-
-// Configuración de rate limiting
-const RATE_LIMIT_CONFIG = {
-  maxConcurrent: 3,        // Máximo 3 llamadas simultáneas
-  delayBetweenBatches: 1000, // 1 segundo entre lotes
-  batchSize: 5,            // Procesar 5 usuarios por lote
-  maxRetries: 3,           // Máximo 3 reintentos
-  retryDelay: 2000         // 2 segundos base para retry
-};
-
-// Cola de usuarios pendientes de procesar
-const pendingUsersQueue = [];
-let activeRequests = 0;
 
 // Cargar cache desde localStorage al iniciar
 function loadCacheFromStorage() {
@@ -184,10 +171,10 @@ function loadCacheFromStorage() {
       Object.entries(cacheData).forEach(([key, value]) => {
         userLocationCache.set(key, value);
       });
-      console.log(`📦 Cache cargado: ${userLocationCache.size} ubicaciones`);
+      console.log(`Cache cargado: ${userLocationCache.size} ubicaciones`);
     }
   } catch (error) {
-    console.log('⚠️ Error cargando cache desde localStorage:', error);
+    console.log('Error cargando cache desde localStorage:', error);
   }
 }
 
@@ -197,164 +184,132 @@ function saveCacheToStorage() {
     const cacheData = Object.fromEntries(userLocationCache);
     localStorage.setItem('userLocationCache', JSON.stringify(cacheData));
   } catch (error) {
-    console.log('⚠️ Error guardando cache en localStorage:', error);
+    console.log('Error guardando cache en localStorage:', error);
   }
 }
 
-// Función para obtener la ubicación de un usuario desde la API con rate limiting
-async function getUserLocation(username) {
+// Función para extraer ubicación directamente del DOM sin llamadas a la API
+function extractLocationFromDOM(username) {
   // Verificar cache primero
   if (userLocationCache.has(username)) {
     return userLocationCache.get(username);
   }
   
-  // Si ya está en la cola, esperar
-  if (pendingUsersQueue.some(item => item.username === username)) {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (userLocationCache.has(username)) {
-          clearInterval(checkInterval);
-          resolve(userLocationCache.get(username));
-        }
-      }, 100);
-    });
-  }
+  let location = 'N/A';
   
-  // Agregar a la cola
-  return new Promise((resolve) => {
-    pendingUsersQueue.push({ username, resolve });
-    processUserQueue();
-  });
-}
-
-// Función para procesar la cola de usuarios con rate limiting
-async function processUserQueue() {
-  if (activeRequests >= RATE_LIMIT_CONFIG.maxConcurrent || pendingUsersQueue.length === 0) {
-    return;
-  }
+  // Buscar enlaces de perfil del usuario en la página actual
+  const userLinks = document.querySelectorAll(`a[href*="/u/${username}"]`);
   
-  // Tomar un lote de usuarios
-  const batch = pendingUsersQueue.splice(0, RATE_LIMIT_CONFIG.batchSize);
-  activeRequests++;
-  
-  console.log(`🔄 Procesando lote de ${batch.length} usuarios (${pendingUsersQueue.length} pendientes)`);
-  
-  // Procesar el lote
-  const promises = batch.map(item => fetchUserLocationWithRetry(item.username));
-  
-  try {
-    await Promise.all(promises);
-  } catch (error) {
-    console.log('⚠️ Error procesando lote:', error);
-  }
-  
-  // Resolver las promesas pendientes
-  batch.forEach(item => {
-    const location = userLocationCache.get(item.username) || 'N/A';
-    item.resolve(location);
-  });
-  
-  activeRequests--;
-  
-  // Esperar antes del siguiente lote
-  if (pendingUsersQueue.length > 0) {
-    setTimeout(() => {
-      processUserQueue();
-    }, RATE_LIMIT_CONFIG.delayBetweenBatches);
-  }
-}
-
-// Función para obtener ubicación con retry y backoff exponencial
-async function fetchUserLocationWithRetry(username, retryCount = 0) {
-  try {
-    console.log(`🔍 Obteniendo ubicación para: ${username} (intento ${retryCount + 1})`);
+  for (const link of userLinks) {
+    // Buscar en el contexto del enlace por información de ubicación
+    const userCard = link.closest('.user-card') || link.closest('.directory-table__row') || link.closest('tr');
     
-    const apiUrl = `/u/${username}.json`;
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    });
-    
-    if (response.ok) {
-      const userData = await response.json();
-      let location = 'N/A';
+    if (userCard) {
+      // Buscar en elementos de texto que puedan contener ubicación
+      const textElements = userCard.querySelectorAll('span, div, td, .directory-table__cell');
       
-      // Verificar si tenemos datos del usuario
-      if (!userData.user) {
-        userLocationCache.set(username, 'N/A');
-        saveCacheToStorage();
-        return 'N/A';
-      }
-      
-      // Buscar la ubicación en el campo "location" estándar
-      if (userData.user.location) {
-        location = userData.user.location;
-      }
-      
-      // Si no se encontró en location estándar, buscar en campos personalizados
-      if (location === 'N/A' && userData.user.user_fields) {
-        for (let i = 1; i <= 20; i++) {
-          const fieldKey = `user_field_${i}`;
-          if (userData.user.user_fields[fieldKey]) {
-            const fieldValue = userData.user.user_fields[fieldKey];
-            if (fieldValue && typeof fieldValue === 'string' && 
-                (fieldValue.toLowerCase().includes('location') || 
-                 fieldValue.toLowerCase().includes('ubicación') ||
-                 fieldValue.toLowerCase().includes('city') ||
-                 fieldValue.toLowerCase().includes('country') ||
-                 fieldValue.toLowerCase().includes('país') ||
-                 fieldValue.toLowerCase().includes('ciudad'))) {
-              location = fieldValue;
+      for (const element of textElements) {
+        const text = element.textContent.trim();
+        
+        // Buscar patrones de ubicación comunes
+        if (text && text.length > 2 && text.length < 100) {
+          // Patrones que indican ubicación
+          if (text.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) && 
+              !text.includes('@') && 
+              !text.includes('http') &&
+              !text.includes('www') &&
+              !text.match(/^\d+$/) &&
+              !text.includes('Joined') &&
+              !text.includes('Posts') &&
+              !text.includes('Topics') &&
+              !text.includes('Likes') &&
+              !text.includes('Last') &&
+              !text.includes('Seen')) {
+            
+            // Verificar si es un país conocido
+            const country = extractCountryFromLocation(text);
+            if (country !== 'Sin ubicación') {
+              location = country;
               break;
             }
           }
         }
       }
       
-      // Extraer el país si se encontró ubicación
-      if (location !== 'N/A') {
-        const country = extractCountryFromLocation(location);
+      if (location !== 'N/A') break;
+    }
+  }
+  
+  // Si no se encontró en el DOM, intentar extraer de información ya disponible
+  if (location === 'N/A') {
+    // Buscar en elementos de la tabla que puedan tener información de ubicación
+    const tableRows = document.querySelectorAll('.directory-table__row, tr');
+    
+    for (const row of tableRows) {
+      const usernameInRow = row.querySelector(`a[href*="/u/${username}"]`);
+      if (usernameInRow) {
+        // Buscar en todas las celdas de la fila
+        const cells = row.querySelectorAll('.directory-table__cell, td');
+        
+        for (const cell of cells) {
+          const cellText = cell.textContent.trim();
+          
+          // Buscar patrones de ubicación en las celdas
+          if (cellText && cellText.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) && 
+              cellText.length > 2 && cellText.length < 50 &&
+              !cellText.includes('@') && 
+              !cellText.includes('http') &&
+              !cellText.match(/^\d+$/) &&
+              !cellText.includes('Joined') &&
+              !cellText.includes('Posts') &&
+              !cellText.includes('Topics') &&
+              !cellText.includes('Likes') &&
+              !cellText.includes('Last') &&
+              !cellText.includes('Seen')) {
+            
+            const country = extractCountryFromLocation(cellText);
+            if (country !== 'Sin ubicación') {
+              location = country;
+              break;
+            }
+          }
+        }
+        
+        if (location !== 'N/A') break;
+      }
+    }
+  }
+  
+  // Si aún no se encontró, intentar extraer de atributos data o información oculta
+  if (location === 'N/A') {
+    // Buscar en elementos con atributos data que puedan contener información de ubicación
+    const dataElements = document.querySelectorAll('[data-user-location], [data-location], [title*="location" i], [title*="ubicación" i]');
+    
+    for (const element of dataElements) {
+      const title = element.getAttribute('title') || '';
+      const dataLocation = element.getAttribute('data-user-location') || element.getAttribute('data-location') || '';
+      
+      if (title || dataLocation) {
+        const text = (title + ' ' + dataLocation).trim();
+        const country = extractCountryFromLocation(text);
+        if (country !== 'Sin ubicación') {
         location = country;
+          break;
+        }
+      }
+    }
       }
       
       // Guardar en cache
       userLocationCache.set(username, location);
-      saveCacheToStorage();
+  saveCacheToStorage();
+  
       return location;
-      
-    } else if (response.status === 429 && retryCount < RATE_LIMIT_CONFIG.maxRetries) {
-      // Rate limit - esperar con backoff exponencial
-      const delay = RATE_LIMIT_CONFIG.retryDelay * Math.pow(2, retryCount);
-      console.log(`⏳ Rate limit alcanzado para ${username}, reintentando en ${delay}ms`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchUserLocationWithRetry(username, retryCount + 1);
-      
-    } else {
-      console.log(`❌ Error ${response.status} para usuario ${username}`);
-      userLocationCache.set(username, 'N/A');
-      saveCacheToStorage();
-      return 'N/A';
-    }
-    
-  } catch (error) {
-    console.log(`❌ Error obteniendo ubicación para ${username}:`, error);
-    
-    if (retryCount < RATE_LIMIT_CONFIG.maxRetries) {
-      const delay = RATE_LIMIT_CONFIG.retryDelay * Math.pow(2, retryCount);
-      console.log(`🔄 Reintentando ${username} en ${delay}ms`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchUserLocationWithRetry(username, retryCount + 1);
-    } else {
-      userLocationCache.set(username, 'N/A');
-      saveCacheToStorage();
-      return 'N/A';
-    }
-  }
+}
+
+// Función para obtener ubicación (ahora sin API calls)
+function getUserLocation(username) {
+  return extractLocationFromDOM(username);
 }
 
 // Inicializar cache al cargar
@@ -413,13 +368,13 @@ async function addLocationColumn() {
     
     if (structure.type === 'modern') {
       // Estructura moderna de Discourse (CSS Grid + ARIA)
-      await addColumnToModernTable(structure.table, structure.columnHeaders, structure.dataRows);
+      addColumnToModernTable(structure.table, structure.columnHeaders, structure.dataRows);
     } else if (structure.type === 'traditional') {
       // Estructura tradicional con thead/tbody
-      await addColumnToTraditionalTable(structure.thead, structure.tbody);
+      addColumnToTraditionalTable(structure.thead, structure.tbody);
     } else if (structure.type === 'alternative') {
       // Estructura alternativa con filas directas
-      await addColumnToAlternativeTable(structure.headerRow, structure.dataRows);
+      addColumnToAlternativeTable(structure.headerRow, structure.dataRows);
     }
     
     // Aplicar estilos CSS personalizados
@@ -432,7 +387,7 @@ async function addLocationColumn() {
 }
 
 // Función para agregar columna a tabla moderna de Discourse
-async function addColumnToModernTable(table, columnHeaders, dataRows) {
+function addColumnToModernTable(table, columnHeaders, dataRows) {
 
   
   // Crear encabezado de columna
@@ -469,18 +424,18 @@ async function addColumnToModernTable(table, columnHeaders, dataRows) {
   
   // Agregar celdas de datos
   for (const row of dataRows) {
-    await addLocationCellToModernRow(row);
+    addLocationCellToModernRow(row);
   }
   
   // Actualizar el CSS Grid para incluir la nueva columna
   updateGridColumns(table);
   
   // Agregar filtro por ubicación
-  await addLocationFilter(table, dataRows);
+  addLocationFilter(table, dataRows);
 }
 
 // Función para agregar celda de ubicación a una fila moderna
-async function addLocationCellToModernRow(row) {
+function addLocationCellToModernRow(row) {
   const locationCell = document.createElement('div');
   locationCell.className = 'directory-table__cell location-column-data';
   locationCell.setAttribute('role', 'cell');
@@ -527,40 +482,26 @@ async function addLocationCellToModernRow(row) {
   }
   
   if (username) {
-    // Verificar si ya está en cache
-    if (userLocationCache.has(username)) {
-      const location = userLocationCache.get(username);
+    // Obtener ubicación directamente del DOM (sin API calls)
+    const location = getUserLocation(username);
+    
       locationCell.textContent = location;
       locationCell.style.fontStyle = 'normal';
       locationCell.style.color = '#40312a';
+    locationCell.style.fontSize = '0.9em';
       
-      if (location !== 'N/A') {
+      // Aplicar estilos especiales para ubicaciones válidas
+    if (location !== 'N/A' && location !== 'Sin ubicación') {
         locationCell.style.fontWeight = '500';
         locationCell.style.color = '#8A4A19';
-      }
     } else {
-      // Mostrar indicador de carga con progreso
-      locationCell.innerHTML = '<span class="loading-indicator">⏳ En cola...</span>';
+      locationCell.style.color = '#999';
       locationCell.style.fontStyle = 'italic';
-      locationCell.style.color = '#666';
-      locationCell.style.fontSize = '0.85em';
-      
-      // Obtener la ubicación del usuario
-      getUserLocation(username).then(location => {
-        locationCell.textContent = location;
-        locationCell.style.fontStyle = 'normal';
-        locationCell.style.color = '#40312a';
-        locationCell.style.fontSize = '0.9em';
-        
-        // Aplicar estilos especiales para ubicaciones válidas
-        if (location !== 'N/A') {
-          locationCell.style.fontWeight = '500';
-          locationCell.style.color = '#8A4A19';
-        }
-      });
-    }
+      }
   } else {
     locationCell.textContent = 'N/A';
+    locationCell.style.color = '#999';
+    locationCell.style.fontStyle = 'italic';
   }
   
   // Insertar la celda en la posición correcta
@@ -579,13 +520,13 @@ function updateGridColumns(table) {
     // Agregar una columna más al grid
     const newStyle = currentStyle.replace(/\)$/, ' minmax(min-content, 1fr))');
     table.style.gridTemplateColumns = newStyle;
-    console.log('🔧 CSS Grid actualizado para incluir la nueva columna');
+    console.log('CSS Grid actualizado para incluir la nueva columna');
   }
 }
 
 // Función para agregar filtro por ubicación
-async function addLocationFilter(table, dataRows) {
-  console.log('🔍 Agregando filtro por ubicación...');
+function addLocationFilter(table, dataRows) {
+  console.log('Agregando filtro por ubicación...');
   
   // Crear el contenedor del filtro
   const filterContainer = document.createElement('div');
@@ -644,16 +585,6 @@ async function addLocationFilter(table, dataRows) {
     font-size: 14px;
   `;
   
-  // Crear indicador de progreso
-  const progressIndicator = document.createElement('span');
-  progressIndicator.className = 'location-progress-indicator';
-  progressIndicator.style.cssText = `
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-style: italic;
-  `;
-  progressIndicator.textContent = 'Cargando ubicaciones...';
-  
   // Función para actualizar el contador
   function updateCounter() {
     const visibleRows = table.querySelectorAll('.directory-table__row:not([style*="display: none"])');
@@ -668,7 +599,7 @@ async function addLocationFilter(table, dataRows) {
     
     locationCells.forEach(cell => {
       const location = cell.textContent.trim();
-      if (location && location !== 'Cargando...' && location !== '⏳ En cola...' && location !== 'N/A') {
+      if (location && location !== 'N/A' && location !== 'Sin ubicación') {
         locations.add(location);
       }
     });
@@ -686,16 +617,11 @@ async function addLocationFilter(table, dataRows) {
       option.textContent = location;
       select.appendChild(option);
     });
-    
-    // Ocultar indicador de progreso si hay ubicaciones
-    if (locations.size > 0) {
-      progressIndicator.style.display = 'none';
-    }
   }
   
   // Función para filtrar
   function filterByLocation(selectedLocation) {
-    console.log(`🔍 Filtrando por ubicación: ${selectedLocation}`);
+    console.log(`Filtrando por ubicación: ${selectedLocation}`);
     
     dataRows.forEach(row => {
       const locationCell = row.querySelector('.location-column-data');
@@ -705,7 +631,7 @@ async function addLocationFilter(table, dataRows) {
         if (selectedLocation === 'all') {
           row.style.display = '';
         } else if (selectedLocation === 'no-location') {
-          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Cargando...' || cellLocation === '⏳ En cola...') ? '' : 'none';
+          row.style.display = (cellLocation === 'N/A' || cellLocation === 'Sin ubicación') ? '' : 'none';
         } else {
           row.style.display = (cellLocation === selectedLocation) ? '' : 'none';
         }
@@ -724,7 +650,6 @@ async function addLocationFilter(table, dataRows) {
   filterContainer.appendChild(label);
   filterContainer.appendChild(select);
   filterContainer.appendChild(counter);
-  filterContainer.appendChild(progressIndicator);
   
   // Insertar el filtro antes de la tabla
   const tableContainer = table.closest('.directory-table-container') || table.parentNode;
@@ -735,41 +660,14 @@ async function addLocationFilter(table, dataRows) {
   // Actualizar contador inicial
   updateCounter();
   
-  // Observar cambios en las celdas de ubicación para actualizar el filtro
-  const observer = new MutationObserver(() => {
-    updateLocationOptions();
-    updateCounter();
-  });
+  // Actualizar opciones inmediatamente (ya que no hay API calls)
+  updateLocationOptions();
   
-  // Observar cambios en el contenido de las celdas de ubicación
-  const locationCells = table.querySelectorAll('.location-column-data');
-  locationCells.forEach(cell => {
-    observer.observe(cell, { childList: true, characterData: true, subtree: true });
-  });
-  
-  // Actualizar opciones cada 2 segundos hasta que se carguen todas las ubicaciones
-  const updateInterval = setInterval(() => {
-    updateLocationOptions();
-    updateCounter();
-    
-    // Detener el intervalo si no hay más celdas con "Cargando..." o "En cola..."
-    const loadingCells = table.querySelectorAll('.location-column-data');
-    const stillLoading = Array.from(loadingCells).some(cell => {
-      const text = cell.textContent.trim();
-      return text === 'Cargando...' || text === '⏳ En cola...';
-    });
-    
-    if (!stillLoading) {
-      clearInterval(updateInterval);
-      progressIndicator.style.display = 'none';
-    }
-  }, 2000);
-  
-  console.log('✅ Filtro por ubicación agregado exitosamente');
+  console.log('Filtro por ubicación agregado exitosamente');
 }
 
 // Función para agregar columna a tabla tradicional
-async function addColumnToTraditionalTable(thead, tbody) {
+function addColumnToTraditionalTable(thead, tbody) {
   const headerRow = thead.querySelector('tr');
   if (!headerRow) return;
   
@@ -790,15 +688,15 @@ async function addColumnToTraditionalTable(thead, tbody) {
   
   // Agregar celdas de datos
   const rows = tbody.querySelectorAll('tr');
-  console.log(`📝 Agregando celdas para ${rows.length} filas...`);
+  console.log(`Agregando celdas para ${rows.length} filas...`);
   
   for (const row of rows) {
-    await addLocationCellToRow(row);
+    addLocationCellToRow(row);
   }
 }
 
 // Función para agregar columna a tabla alternativa
-async function addColumnToAlternativeTable(headerRow, dataRows) {
+function addColumnToAlternativeTable(headerRow, dataRows) {
   // Agregar encabezado de columna
   const locationHeader = document.createElement('th');
   locationHeader.className = 'location-column-header';
@@ -815,15 +713,15 @@ async function addColumnToAlternativeTable(headerRow, dataRows) {
   }
   
   // Agregar celdas de datos
-  console.log(`📝 Agregando celdas para ${dataRows.length} filas...`);
+  console.log(`Agregando celdas para ${dataRows.length} filas...`);
   
   for (const row of dataRows) {
-    await addLocationCellToRow(row);
+    addLocationCellToRow(row);
   }
 }
 
 // Función para agregar celda de ubicación a una fila tradicional
-async function addLocationCellToRow(row) {
+function addLocationCellToRow(row) {
   const locationCell = document.createElement('td');
   locationCell.className = 'location-column-data';
   locationCell.style.textAlign = 'center';
@@ -834,25 +732,26 @@ async function addLocationCellToRow(row) {
   if (usernameLink) {
     const username = usernameLink.textContent.trim();
     
-    // Mostrar "Cargando..." inicialmente
-    locationCell.textContent = 'Cargando...';
-    locationCell.style.fontStyle = 'italic';
-    locationCell.style.color = '#666';
+    // Obtener ubicación directamente del DOM (sin API calls)
+    const location = getUserLocation(username);
     
-    // Obtener la ubicación del usuario
-    getUserLocation(username).then(location => {
       locationCell.textContent = location;
       locationCell.style.fontStyle = 'normal';
       locationCell.style.color = '#40312a';
+    locationCell.style.fontSize = '0.9em';
       
       // Aplicar estilos especiales para ubicaciones válidas
-      if (location !== 'N/A') {
+    if (location !== 'N/A' && location !== 'Sin ubicación') {
         locationCell.style.fontWeight = '500';
         locationCell.style.color = '#8A4A19';
+    } else {
+      locationCell.style.color = '#999';
+      locationCell.style.fontStyle = 'italic';
       }
-    });
   } else {
     locationCell.textContent = 'N/A';
+    locationCell.style.color = '#999';
+    locationCell.style.fontStyle = 'italic';
   }
   
   // Insertar la celda en la posición correcta
@@ -1157,32 +1056,25 @@ function cleanupLocationColumn() {
   existingCells.forEach(cell => cell.remove());
   if (existingStyle) existingStyle.remove();
   if (existingFilter) existingFilter.remove();
-  
-  // Limpiar cola de usuarios pendientes
-  pendingUsersQueue.length = 0;
-  activeRequests = 0;
 }
 
 // Función para limpiar el cache (útil para debugging o cuando se quiera refrescar datos)
 function clearLocationCache() {
   userLocationCache.clear();
   localStorage.removeItem('userLocationCache');
-  console.log('🗑️ Cache de ubicaciones limpiado');
+  console.log('Cache de ubicaciones limpiado');
 }
 
 // Función para mostrar estadísticas del cache (útil para debugging)
 function showCacheStats() {
   const cacheSize = userLocationCache.size;
-  const pendingCount = pendingUsersQueue.length;
-  const activeCount = activeRequests;
+  const localStorageSize = localStorage.getItem('userLocationCache') ? JSON.parse(localStorage.getItem('userLocationCache')).length : 0;
   
-  console.log(`📊 Estadísticas del cache:
+  console.log(`Estadísticas del cache:
     - Ubicaciones en cache: ${cacheSize}
-    - Usuarios en cola: ${pendingCount}
-    - Llamadas activas: ${activeCount}
-    - Tamaño del cache en localStorage: ${localStorage.getItem('userLocationCache') ? JSON.parse(localStorage.getItem('userLocationCache')).length : 0} items`);
+    - Tamaño del cache en localStorage: ${localStorageSize} items`);
   
-  return { cacheSize, pendingCount, activeCount };
+  return { cacheSize, localStorageSize };
 }
 
 // Hacer funciones disponibles globalmente para debugging
@@ -1195,7 +1087,7 @@ async function initLocationColumn() {
     // Esperar a que Discourse esté completamente cargado
     await waitForDiscourse();
     
-    console.log('🚀 Inicializando columna Location...');
+    console.log('Inicializando columna Location...');
     
     // Ejecutar cuando se carga la página
     await addLocationColumn();
@@ -1250,10 +1142,10 @@ async function initLocationColumn() {
       }
     });
     
-    console.log('🚀 Columna Location inicializada correctamente');
+    console.log('Columna Location inicializada correctamente');
     
   } catch (error) {
-    console.log('❌ Error inicializando columna Location:', error);
+    console.log('Error inicializando columna Location:', error);
   }
 }
 
