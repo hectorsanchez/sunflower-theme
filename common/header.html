@@ -199,7 +199,12 @@ function saveCacheToStorage() {
 function extractLocationFromDOM(username) {
   // Verificar cache primero
   if (userLocationCache.has(username)) {
-    return userLocationCache.get(username);
+    const cachedLocation = userLocationCache.get(username);
+    // Debug específico para "Read Time" en cache
+    if (cachedLocation === 'Read Time') {
+      console.log(`DEBUG: "Read Time" encontrado en cache para usuario ${username}`);
+    }
+    return cachedLocation;
   }
   
   let location = 'N/A';
@@ -260,7 +265,7 @@ function extractLocationFromDOM(username) {
           const country = extractCountryFromLocation(cellText);
           if (country !== 'Sin ubicación') {
             location = country;
-            break;
+              break;
           }
         }
       }
@@ -280,13 +285,18 @@ function extractLocationFromDOM(username) {
         const text = (title + ' ' + dataLocation).trim();
         const country = extractCountryFromLocation(text);
         if (country !== 'Sin ubicación') {
-          location = country;
+        location = country;
           break;
         }
       }
     }
-  }
+      }
       
+  // Debug si se está guardando "Read Time"
+  if (location === 'Read Time') {
+    console.log(`DEBUG: Guardando "Read Time" en cache para usuario ${username}`);
+  }
+  
   // Guardar en cache
   userLocationCache.set(username, location);
   saveCacheToStorage();
@@ -419,6 +429,8 @@ function setupInfiniteScrollObserver() {
 
 // Inicializar cache al cargar
 loadCacheFromStorage();
+// Limpiar entradas inválidas del cache
+cleanInvalidCacheEntries();
 
 // Función para validar si un texto es una ubicación válida
 function isValidLocation(text) {
@@ -1222,6 +1234,22 @@ function clearLocationCache() {
   console.log('Cache de ubicaciones limpiado');
 }
 
+// Función para limpiar entradas específicas del cache que contengan "Read Time"
+function cleanInvalidCacheEntries() {
+  let cleaned = 0;
+  for (const [username, location] of userLocationCache.entries()) {
+    if (location === 'Read Time' || location.toLowerCase().includes('read time')) {
+      userLocationCache.delete(username);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    saveCacheToStorage();
+    console.log(`Limpiadas ${cleaned} entradas inválidas del cache`);
+  }
+}
+
 // Función para mostrar estadísticas del cache (útil para debugging)
 function showCacheStats() {
   const cacheSize = userLocationCache.size;
@@ -1236,6 +1264,7 @@ function showCacheStats() {
 
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
+window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.showCacheStats = showCacheStats;
 
 // Función principal que se ejecuta cuando Discourse esté listo
