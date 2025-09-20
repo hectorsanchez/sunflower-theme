@@ -577,6 +577,12 @@ function processNewRows() {
         currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
         updateFilterAndCounter();
         console.log(`Scroll infinito: ${newRows.length} nuevas filas procesadas, total: ${currentDataRows.length}`);
+        
+        // Asegurar que el filtro se aplique a las nuevas filas
+        if (filterSelect && filterSelect.value && filterSelect.value !== 'all') {
+          console.log(`Aplicando filtro "${filterSelect.value}" a las nuevas filas`);
+          filterByLocation(filterSelect.value);
+        }
       }, newRows.length * 100 + 200);
     }, 300); // Esperar 300ms antes de procesar
   }
@@ -615,6 +621,13 @@ function updateFilterAndCounter() {
   
   // Actualizar opciones del filtro
   updateLocationOptions();
+  
+  // Reaplicar el filtro actual si hay uno seleccionado
+  const currentFilter = filterSelect.value;
+  if (currentFilter && currentFilter !== 'all') {
+    console.log(`Reaplicando filtro "${currentFilter}" después de actualizar filas`);
+    filterByLocation(currentFilter);
+  }
 }
 
 // Función para actualizar opciones del filtro
@@ -1177,13 +1190,19 @@ function addLocationFilter(table, dataRows) {
   function filterByLocation(selectedLocation) {
     console.log(`Filtrando por ubicación: "${selectedLocation}"`);
     
+    // Usar currentDataRows que se actualiza con scroll infinito, no dataRows inicial
+    const rowsToFilter = currentDataRows.length > 0 ? currentDataRows : dataRows;
+    console.log(`Filtrando ${rowsToFilter.length} filas (currentDataRows: ${currentDataRows.length}, dataRows: ${dataRows.length})`);
+    
     let visibleCount = 0;
     
-    dataRows.forEach(row => {
+    rowsToFilter.forEach((row, index) => {
       const locationCell = row.querySelector('.location-column-data');
+      let shouldShow = false;
+      let cellLocation = 'N/A';
+      
       if (locationCell) {
-        const cellLocation = locationCell.textContent.trim();
-        let shouldShow = false;
+        cellLocation = locationCell.textContent.trim();
         
         if (selectedLocation === 'all') {
           shouldShow = true;
@@ -1213,18 +1232,28 @@ function addLocationFilter(table, dataRows) {
             );
           }
         }
-        
-        row.style.display = shouldShow ? '' : 'none';
-        if (shouldShow) visibleCount++;
-        
-        // Debug para las primeras filas
-        if (visibleCount <= 5) {
-          console.log(`Fila ${visibleCount}: "${cellLocation}" ${shouldShow ? 'VISIBLE' : 'OCULTA'} (filtro: "${selectedLocation}")`);
+      } else {
+        // Si no hay celda de ubicación, tratar como "no-location"
+        if (selectedLocation === 'all') {
+          shouldShow = true;
+        } else if (selectedLocation === 'no-location') {
+          shouldShow = true;
+        } else {
+          shouldShow = false;
         }
+        cellLocation = 'N/A (sin columna)';
+      }
+      
+      row.style.display = shouldShow ? '' : 'none';
+      if (shouldShow) visibleCount++;
+      
+      // Debug para las primeras filas
+      if (index < 5) {
+        console.log(`Fila ${index}: "${cellLocation}" ${shouldShow ? 'VISIBLE' : 'OCULTA'} (filtro: "${selectedLocation}")`);
       }
     });
     
-    console.log(`Filtro aplicado: ${visibleCount} usuarios visibles de ${dataRows.length} total`);
+    console.log(`Filtro aplicado: ${visibleCount} usuarios visibles de ${rowsToFilter.length} total`);
     updateCounter();
   }
   
@@ -1232,6 +1261,14 @@ function addLocationFilter(table, dataRows) {
   select.addEventListener('change', (e) => {
     filterByLocation(e.target.value);
   });
+  
+  // Función para forzar la reaplicación del filtro (útil para debugging)
+  window.forceFilterReapply = function() {
+    if (filterSelect && filterSelect.value) {
+      console.log('Forzando reaplicación del filtro...');
+      filterByLocation(filterSelect.value);
+    }
+  };
   
   // Ensamblar el filtro
   filterContainer.appendChild(label);
@@ -1969,6 +2006,41 @@ window.debugUserDOM = debugUserDOM;
 window.debugThirdScroll = debugThirdScroll;
 window.debugSpecificUser = debugSpecificUser;
 window.debugFilter = debugFilter;
+
+// Función de debug específica para el problema del filtro
+window.debugFilterIssue = function() {
+  console.log('=== DEBUG FILTRO ISSUE ===');
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  console.log(`Total de filas en DOM: ${allRows.length}`);
+  console.log(`currentDataRows.length: ${currentDataRows.length}`);
+  
+  const rowsWithLocation = allRows.filter(row => row.querySelector('.location-column-data'));
+  console.log(`Filas con columna de ubicación: ${rowsWithLocation.length}`);
+  
+  const visibleRows = allRows.filter(row => !row.style.display || row.style.display !== 'none');
+  console.log(`Filas visibles: ${visibleRows.length}`);
+  
+  if (filterSelect) {
+    console.log(`Filtro actual: "${filterSelect.value}"`);
+  }
+  
+  // Mostrar las primeras 10 filas con su estado
+  console.log('Primeras 10 filas:');
+  allRows.slice(0, 10).forEach((row, index) => {
+    const locationCell = row.querySelector('.location-column-data');
+    const location = locationCell ? locationCell.textContent.trim() : 'N/A (sin columna)';
+    const isVisible = !row.style.display || row.style.display !== 'none';
+    console.log(`  ${index}: "${location}" - ${isVisible ? 'VISIBLE' : 'OCULTA'}`);
+  });
+  
+  console.log('=== FIN DEBUG FILTRO ISSUE ===');
+};
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
