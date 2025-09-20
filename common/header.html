@@ -721,6 +721,24 @@ function isValidLocationSimple(text) {
     }
   }
   
+  // Rechazar usernames comunes (patrones típicos de usernames)
+  if (text.match(/^[a-z]+_[a-z]+$/) || // patrones como "zonas_comunes"
+      text.match(/^[a-z]+\.[a-z]+$/) || // patrones como "user.name"
+      text.match(/^[a-z]+[0-9]+$/) || // patrones como "user123"
+      text.match(/^[a-z]+[0-9]+[a-z]+$/) || // patrones como "user123name"
+      text.match(/^[a-z]+[0-9]+_[a-z]+$/) || // patrones como "user123_name"
+      text.match(/^[a-z]+_[a-z]+[0-9]+$/) || // patrones como "user_name123"
+      text.match(/^[a-z]+_[a-z]+_[a-z]+$/)) { // patrones como "user_name_more"
+    console.log(`Texto rechazado por ser username: "${text}"`);
+    return false;
+  }
+  
+  // Rechazar texto que no empieza con mayúscula
+  if (text.match(/^[a-z]/)) {
+    console.log(`Texto rechazado por no tener mayúscula: "${text}"`);
+    return false;
+  }
+  
   // Verificar patrones básicos de ubicación
   // Debe empezar con mayúscula y contener solo letras, espacios, comas y puntos
   if (text.match(/^[A-Z][a-zA-Z\s,.-]+$/) && 
@@ -1661,8 +1679,72 @@ window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.cleanDateTimeCacheEntries = cleanDateTimeCacheEntries;
 window.showCacheStats = showCacheStats;
+// Función de debug específica para un usuario
+function debugSpecificUser(username) {
+  console.log(`=== DEBUG USUARIO: ${username} ===`);
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  // Buscar la fila del usuario
+  const userRow = currentTable.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+  if (!userRow) {
+    console.log(`No se encontró la fila del usuario ${username}`);
+    return;
+  }
+  
+  console.log(`Fila encontrada para usuario ${username}`);
+  
+  // Buscar el enlace del usuario
+  const userLink = userRow.querySelector(`a[href*="/u/${username}"]`);
+  if (!userLink) {
+    console.log(`No se encontró el enlace del usuario ${username}`);
+    return;
+  }
+  
+  console.log(`Enlace encontrado: ${userLink.href}`);
+  
+  // Buscar el userCard
+  const userCard = userLink.closest('.user-card, .directory-table__row, tr');
+  if (!userCard) {
+    console.log(`No se encontró el userCard del usuario ${username}`);
+    return;
+  }
+  
+  console.log(`UserCard encontrado para usuario ${username}`);
+  
+  // Buscar todos los elementos de texto
+  const textElements = userCard.querySelectorAll('span, div, p, td');
+  console.log(`Encontrados ${textElements.length} elementos de texto para usuario ${username}`);
+  
+  // Mostrar todos los textos encontrados
+  textElements.forEach((element, index) => {
+    const text = element.textContent.trim();
+    if (text && text.length > 0) {
+      console.log(`Elemento ${index}: "${text}"`);
+      
+      // Verificar si es una ubicación válida
+      if (isValidLocationSimple(text)) {
+        console.log(`  → VÁLIDO como ubicación`);
+      } else {
+        console.log(`  → Rechazado como ubicación`);
+      }
+    }
+  });
+  
+  // Intentar extraer ubicación manualmente
+  console.log(`Intentando extraer ubicación para ${username}...`);
+  const extractedLocation = extractLocationFromDOM(username);
+  console.log(`Ubicación extraída: "${extractedLocation}"`);
+  
+  console.log(`=== FIN DEBUG USUARIO: ${username} ===`);
+}
+
 window.debugUserDOM = debugUserDOM;
 window.debugThirdScroll = debugThirdScroll;
+window.debugSpecificUser = debugSpecificUser;
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
