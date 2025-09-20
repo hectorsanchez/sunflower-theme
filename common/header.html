@@ -1213,7 +1213,7 @@ function addLocationFilter(table, dataRows) {
           const cellLocationLower = cellLocation.toLowerCase();
           const selectedLocationLower = selectedLocation.toLowerCase();
           
-          // Comparación exacta
+          // Comparación exacta (prioridad máxima)
           shouldShow = (cellLocationLower === selectedLocationLower);
           
           // Si no coincide exactamente, verificar si contiene la ubicación seleccionada
@@ -1221,15 +1221,21 @@ function addLocationFilter(table, dataRows) {
             shouldShow = true;
           }
           
-          // Verificar casos especiales (ej: "Spain" vs "spain")
+          // Verificar casos especiales con matching más estricto
           if (!shouldShow) {
-            const cellWords = cellLocationLower.split(/[\s,.-]+/);
-            const selectedWords = selectedLocationLower.split(/[\s,.-]+/);
+            const cellWords = cellLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
+            const selectedWords = selectedLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
             
-            // Si alguna palabra de la ubicación seleccionada está en la celda
-            shouldShow = selectedWords.some(word => 
-              word.length > 2 && cellWords.some(cellWord => cellWord.includes(word))
-            );
+            // Solo hacer matching si hay al menos 2 palabras en común (para evitar falsos positivos)
+            if (selectedWords.length >= 2) {
+              const commonWords = selectedWords.filter(selectedWord => 
+                cellWords.some(cellWord => cellWord === selectedWord)
+              );
+              shouldShow = commonWords.length >= 2;
+            } else if (selectedWords.length === 1) {
+              // Para países de una palabra, usar matching exacto de palabra completa
+              shouldShow = cellWords.some(cellWord => cellWord === selectedWords[0]);
+            }
           }
         }
       } else {
@@ -2040,6 +2046,99 @@ window.debugFilterIssue = function() {
   });
   
   console.log('=== FIN DEBUG FILTRO ISSUE ===');
+};
+
+// Función de debug específica para probar casos problemáticos de países
+window.debugCountryMatching = function(country1, country2) {
+  console.log(`=== DEBUG MATCHING DE PAÍSES: "${country1}" vs "${country2}" ===`);
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  const rowsWithLocation = allRows.filter(row => row.querySelector('.location-column-data'));
+  
+  console.log(`Probando matching para "${country1}":`);
+  rowsWithLocation.forEach((row, index) => {
+    const locationCell = row.querySelector('.location-column-data');
+    const cellLocation = locationCell.textContent.trim();
+    
+    // Simular la lógica de matching
+    const cellLocationLower = cellLocation.toLowerCase();
+    const selectedLocationLower = country1.toLowerCase();
+    
+    let shouldShow = false;
+    
+    // Comparación exacta
+    shouldShow = (cellLocationLower === selectedLocationLower);
+    
+    // Si no coincide exactamente, verificar si contiene la ubicación seleccionada
+    if (!shouldShow && cellLocationLower.includes(selectedLocationLower)) {
+      shouldShow = true;
+    }
+    
+    // Verificar casos especiales con matching más estricto
+    if (!shouldShow) {
+      const cellWords = cellLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
+      const selectedWords = selectedLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
+      
+      if (selectedWords.length >= 2) {
+        const commonWords = selectedWords.filter(selectedWord => 
+          cellWords.some(cellWord => cellWord === selectedWord)
+        );
+        shouldShow = commonWords.length >= 2;
+      } else if (selectedWords.length === 1) {
+        shouldShow = cellWords.some(cellWord => cellWord === selectedWords[0]);
+      }
+    }
+    
+    if (shouldShow) {
+      console.log(`  ✓ "${cellLocation}" MATCH con "${country1}"`);
+    }
+  });
+  
+  console.log(`\nProbando matching para "${country2}":`);
+  rowsWithLocation.forEach((row, index) => {
+    const locationCell = row.querySelector('.location-column-data');
+    const cellLocation = locationCell.textContent.trim();
+    
+    // Simular la lógica de matching
+    const cellLocationLower = cellLocation.toLowerCase();
+    const selectedLocationLower = country2.toLowerCase();
+    
+    let shouldShow = false;
+    
+    // Comparación exacta
+    shouldShow = (cellLocationLower === selectedLocationLower);
+    
+    // Si no coincide exactamente, verificar si contiene la ubicación seleccionada
+    if (!shouldShow && cellLocationLower.includes(selectedLocationLower)) {
+      shouldShow = true;
+    }
+    
+    // Verificar casos especiales con matching más estricto
+    if (!shouldShow) {
+      const cellWords = cellLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
+      const selectedWords = selectedLocationLower.split(/[\s,.-]+/).filter(word => word.length > 2);
+      
+      if (selectedWords.length >= 2) {
+        const commonWords = selectedWords.filter(selectedWord => 
+          cellWords.some(cellWord => cellWord === selectedWord)
+        );
+        shouldShow = commonWords.length >= 2;
+      } else if (selectedWords.length === 1) {
+        shouldShow = cellWords.some(cellWord => cellWord === selectedWords[0]);
+      }
+    }
+    
+    if (shouldShow) {
+      console.log(`  ✓ "${cellLocation}" MATCH con "${country2}"`);
+    }
+  });
+  
+  console.log('=== FIN DEBUG MATCHING DE PAÍSES ===');
 };
 
 // Función principal que se ejecuta cuando Discourse esté listo
