@@ -669,27 +669,37 @@ function setupInfiniteScrollObserver() {
   let isProcessing = false;
   let lastRowCount = 0;
   
-  // Función para forzar la carga de más usuarios si es necesario
+  // Función para forzar la carga de más usuarios si es necesario (solo para vista pública)
   function checkAndLoadMoreUsers() {
     const currentRowCount = currentTable.querySelectorAll('.directory-table__row, tr').length;
     console.log(`Verificando carga de usuarios: ${currentRowCount} filas actuales`);
     
-    // Si hay menos de 100 usuarios y no estamos procesando, intentar cargar más
-    if (currentRowCount < 100 && !isProcessing) {
-      console.log('Intentando cargar más usuarios...');
+    // Solo intentar cargar más usuarios si estamos en vista pública y hay menos de 100
+    const isPublicUsersPage = window.location.pathname.includes('/u') && 
+      (window.location.search.includes('order=') || window.location.pathname === '/u');
+    
+    if (isPublicUsersPage && currentRowCount < 100 && !isProcessing) {
+      console.log('Intentando cargar más usuarios en vista pública...');
       
-      // Buscar el botón de "Load More" o trigger de scroll infinito nativo
-      const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more]');
+      // Buscar botón de "Load More" o enlaces de paginación
+      const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more], .btn-primary[href*="page"]');
       if (loadMoreButton) {
         console.log('Encontrado botón Load More, haciendo clic...');
         loadMoreButton.click();
         return;
       }
       
-      // Si no hay botón, intentar hacer scroll para trigger el scroll infinito nativo
+      const paginationLinks = document.querySelectorAll('a[href*="page"], .pagination a, .page-link');
+      if (paginationLinks.length > 0) {
+        console.log('Encontrados enlaces de paginación, haciendo clic en el siguiente...');
+        paginationLinks[0].click();
+        return;
+      }
+      
+      // Hacer scroll suave para trigger scroll infinito nativo
       const tableContainer = currentTable.closest('.directory-table-container, .users-container, .directory');
       if (tableContainer) {
-        console.log('Haciendo scroll para trigger scroll infinito nativo...');
+        console.log('Haciendo scroll suave para trigger scroll infinito nativo...');
         tableContainer.scrollTop = tableContainer.scrollHeight;
       }
     }
@@ -1308,9 +1318,18 @@ function addLocationFilter(table, dataRows) {
     }
   };
   
-  // Función para forzar la carga de más usuarios
+  // Función para forzar la carga de más usuarios (solo para vista pública)
   window.forceLoadMoreUsers = function() {
     console.log('Forzando carga de más usuarios...');
+    
+    // Verificar que estamos en vista pública
+    const isPublicUsersPage = window.location.pathname.includes('/u') && 
+      (window.location.search.includes('order=') || window.location.pathname === '/u');
+    
+    if (!isPublicUsersPage) {
+      console.log('Esta función solo funciona en la vista pública de usuarios');
+      return false;
+    }
     
     // Buscar botón de Load More
     const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more], .btn-primary[href*="page"]');
@@ -1321,17 +1340,17 @@ function addLocationFilter(table, dataRows) {
     }
     
     // Buscar enlaces de paginación
-    const paginationLinks = document.querySelectorAll('a[href*="page"], .pagination a');
+    const paginationLinks = document.querySelectorAll('a[href*="page"], .pagination a, .page-link');
     if (paginationLinks.length > 0) {
       console.log('Encontrados enlaces de paginación, haciendo clic en el siguiente...');
       paginationLinks[0].click();
       return true;
     }
     
-    // Intentar hacer scroll para trigger scroll infinito
+    // Hacer scroll suave para trigger scroll infinito
     const tableContainer = currentTable ? currentTable.closest('.directory-table-container, .users-container, .directory') : null;
     if (tableContainer) {
-      console.log('Haciendo scroll para trigger scroll infinito...');
+      console.log('Haciendo scroll suave para trigger scroll infinito...');
       tableContainer.scrollTop = tableContainer.scrollHeight;
       return true;
     }
@@ -1357,8 +1376,13 @@ function addLocationFilter(table, dataRows) {
   // Actualizar opciones inmediatamente (ya que no hay API calls)
   updateLocationOptions();
   
-  // Configurar scroll infinito mejorado
-  setupInfiniteScrollObserver();
+  // Configurar scroll infinito mejorado solo para vista pública
+  const isPublicUsersPage = window.location.pathname.includes('/u') && 
+    (window.location.search.includes('order=') || window.location.pathname === '/u');
+  
+  if (isPublicUsersPage) {
+    setupInfiniteScrollObserver();
+  }
   
   console.log('Filtro por ubicación agregado exitosamente');
 }
@@ -2256,6 +2280,7 @@ window.debugUserLoading = function() {
   
   console.log('=== FIN DEBUG CARGA DE USUARIOS ===');
 };
+
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
