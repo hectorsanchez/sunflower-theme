@@ -669,6 +669,32 @@ function setupInfiniteScrollObserver() {
   let isProcessing = false;
   let lastRowCount = 0;
   
+  // Función para forzar la carga de más usuarios si es necesario
+  function checkAndLoadMoreUsers() {
+    const currentRowCount = currentTable.querySelectorAll('.directory-table__row, tr').length;
+    console.log(`Verificando carga de usuarios: ${currentRowCount} filas actuales`);
+    
+    // Si hay menos de 100 usuarios y no estamos procesando, intentar cargar más
+    if (currentRowCount < 100 && !isProcessing) {
+      console.log('Intentando cargar más usuarios...');
+      
+      // Buscar el botón de "Load More" o trigger de scroll infinito nativo
+      const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more]');
+      if (loadMoreButton) {
+        console.log('Encontrado botón Load More, haciendo clic...');
+        loadMoreButton.click();
+        return;
+      }
+      
+      // Si no hay botón, intentar hacer scroll para trigger el scroll infinito nativo
+      const tableContainer = currentTable.closest('.directory-table-container, .users-container, .directory');
+      if (tableContainer) {
+        console.log('Haciendo scroll para trigger scroll infinito nativo...');
+        tableContainer.scrollTop = tableContainer.scrollHeight;
+      }
+    }
+  }
+  
   // Crear un observer para detectar cambios en el DOM
   const observer = new MutationObserver(function(mutations) {
     let shouldProcess = false;
@@ -700,6 +726,9 @@ function setupInfiniteScrollObserver() {
           console.log(`Scroll infinito detectado: ${lastRowCount} → ${currentRowCount} filas, procesando nuevas filas...`);
           lastRowCount = currentRowCount;
           processNewRows();
+          
+          // Verificar si necesitamos cargar más usuarios
+          setTimeout(checkAndLoadMoreUsers, 1000);
         }
       }, 1500); // Aumentar a 1.5 segundos para asegurar renderizado completo
     }
@@ -722,6 +751,9 @@ function setupInfiniteScrollObserver() {
   
   // Inicializar el contador de filas
   lastRowCount = currentTable.querySelectorAll('.directory-table__row, tr').length;
+  
+  // Verificar si necesitamos cargar más usuarios inicialmente
+  setTimeout(checkAndLoadMoreUsers, 2000);
   
   console.log(`MutationObserver configurado para scroll infinito mejorado con delay de 1.5 segundos (${lastRowCount} filas iniciales)`);
 }
@@ -1274,6 +1306,38 @@ function addLocationFilter(table, dataRows) {
       console.log('Forzando reaplicación del filtro...');
       filterByLocation(filterSelect.value);
     }
+  };
+  
+  // Función para forzar la carga de más usuarios
+  window.forceLoadMoreUsers = function() {
+    console.log('Forzando carga de más usuarios...');
+    
+    // Buscar botón de Load More
+    const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more], .btn-primary[href*="page"]');
+    if (loadMoreButton) {
+      console.log('Encontrado botón Load More, haciendo clic...');
+      loadMoreButton.click();
+      return true;
+    }
+    
+    // Buscar enlaces de paginación
+    const paginationLinks = document.querySelectorAll('a[href*="page"], .pagination a');
+    if (paginationLinks.length > 0) {
+      console.log('Encontrados enlaces de paginación, haciendo clic en el siguiente...');
+      paginationLinks[0].click();
+      return true;
+    }
+    
+    // Intentar hacer scroll para trigger scroll infinito
+    const tableContainer = currentTable ? currentTable.closest('.directory-table-container, .users-container, .directory') : null;
+    if (tableContainer) {
+      console.log('Haciendo scroll para trigger scroll infinito...');
+      tableContainer.scrollTop = tableContainer.scrollHeight;
+      return true;
+    }
+    
+    console.log('No se encontró manera de cargar más usuarios');
+    return false;
   };
   
   // Ensamblar el filtro
@@ -2139,6 +2203,58 @@ window.debugCountryMatching = function(country1, country2) {
   });
   
   console.log('=== FIN DEBUG MATCHING DE PAÍSES ===');
+};
+
+// Función de debug específica para verificar la carga de usuarios
+window.debugUserLoading = function() {
+  console.log('=== DEBUG CARGA DE USUARIOS ===');
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  console.log(`Total de filas en la tabla: ${allRows.length}`);
+  console.log(`currentDataRows.length: ${currentDataRows.length}`);
+  
+  // Buscar elementos de paginación
+  const loadMoreButton = document.querySelector('.load-more, .btn-load-more, [data-load-more]');
+  const paginationLinks = document.querySelectorAll('a[href*="page"], .pagination a');
+  const nextPageLink = document.querySelector('.pagination .next, .pagination .page-next');
+  
+  console.log(`Botón Load More encontrado: ${!!loadMoreButton}`);
+  console.log(`Enlaces de paginación encontrados: ${paginationLinks.length}`);
+  console.log(`Enlace "Siguiente" encontrado: ${!!nextPageLink}`);
+  
+  if (loadMoreButton) {
+    console.log('Botón Load More:', loadMoreButton);
+  }
+  
+  if (paginationLinks.length > 0) {
+    console.log('Enlaces de paginación:');
+    paginationLinks.forEach((link, index) => {
+      console.log(`  ${index}: ${link.textContent.trim()} - ${link.href}`);
+    });
+  }
+  
+  // Verificar si hay indicadores de carga
+  const loadingIndicators = document.querySelectorAll('.loading, .spinner, .fa-spinner, [data-loading]');
+  console.log(`Indicadores de carga encontrados: ${loadingIndicators.length}`);
+  
+  // Verificar el contenedor de la tabla
+  const tableContainer = currentTable.closest('.directory-table-container, .users-container, .directory');
+  if (tableContainer) {
+    console.log('Contenedor de tabla encontrado:', tableContainer.className);
+    console.log(`Altura del contenedor: ${tableContainer.scrollHeight}px`);
+    console.log(`Scroll actual: ${tableContainer.scrollTop}px`);
+  }
+  
+  // Verificar si hay más usuarios disponibles
+  const hasMoreUsers = allRows.length < 100 || loadMoreButton || paginationLinks.length > 0;
+  console.log(`¿Parece haber más usuarios disponibles?: ${hasMoreUsers}`);
+  
+  console.log('=== FIN DEBUG CARGA DE USUARIOS ===');
 };
 
 // Función principal que se ejecuta cuando Discourse esté listo
