@@ -284,12 +284,29 @@ function extractLocationFromDOM(username) {
         const text = (title + ' ' + dataLocation).trim();
         const country = extractCountryFromLocation(text);
         if (country !== 'Sin ubicación') {
-        location = country;
+          location = country;
           break;
         }
       }
     }
+  }
+  
+  // Si aún no se encontró, buscar en el perfil del usuario (si está disponible)
+  if (location === 'N/A') {
+    // Buscar en elementos que puedan contener información de perfil
+    const profileElements = document.querySelectorAll('[data-user-profile], [data-profile], .user-profile, .profile-info');
+    
+    for (const element of profileElements) {
+      const text = element.textContent.trim();
+      if (isValidLocation(text)) {
+        const country = extractCountryFromLocation(text);
+        if (country !== 'Sin ubicación') {
+          location = country;
+          break;
+        }
       }
+    }
+  }
       
   // Debug si se está guardando "Read Time"
   if (location === 'Read Time') {
@@ -436,6 +453,8 @@ function setupInfiniteScrollObserver() {
 loadCacheFromStorage();
 // Limpiar entradas inválidas del cache
 cleanInvalidCacheEntries();
+// Limpiar entradas N/A del cache para permitir re-extracción
+cleanNACacheEntries();
 
 // Función para validar si un texto es una ubicación válida
 function isValidLocation(text) {
@@ -448,35 +467,29 @@ function isValidLocation(text) {
     console.log(`DEBUG: Evaluando texto: "${text}"`);
   }
   
-  // Lista de palabras que NO son ubicaciones
-  const invalidWords = [
-    'read', 'time', 'read time', 'joined', 'posts', 'topics', 'likes', 
-    'last', 'seen', 'active', 'new', 'staff', 'suspended', 'silenced', 
-    'staged', 'trust', 'level', 'admin', 'moderator', 'user', 'member',
-    'online', 'offline', 'away', 'busy', 'do not disturb', 'status',
-    'profile', 'avatar', 'email', 'username', 'name', 'title', 'role',
-    'permissions', 'settings', 'preferences', 'account', 'login', 'logout',
-    'search', 'filter', 'sort', 'order', 'date', 'created', 'updated',
-    'deleted', 'archived', 'hidden', 'private', 'public', 'draft',
-    'published', 'pending', 'approved', 'rejected', 'flagged', 'reported',
-    'banned', 'muted', 'warned', 'suspended', 'restricted', 'limited',
+  // Verificación específica para "Read Time" y otros textos de UI comunes
+  const uiTexts = [
+    'read time', 'last emailed', 'seen', 'topics viewed', 'posts read', 
+    'created', 'status', 'joined', 'posts', 'topics', 'likes', 'active', 
+    'new', 'staff', 'suspended', 'silenced', 'staged', 'trust', 'level',
+    'admin', 'moderator', 'user', 'member', 'online', 'offline', 'away',
+    'busy', 'do not disturb', 'profile', 'avatar', 'email', 'username',
+    'name', 'title', 'role', 'permissions', 'settings', 'preferences',
+    'account', 'login', 'logout', 'search', 'filter', 'sort', 'order',
+    'date', 'updated', 'deleted', 'archived', 'hidden', 'private', 'public',
+    'draft', 'published', 'pending', 'approved', 'rejected', 'flagged',
+    'reported', 'banned', 'muted', 'warned', 'restricted', 'limited',
     'days', 'hours', 'minutes', 'seconds', 'ago', 'today', 'yesterday',
     'week', 'month', 'year', 'january', 'february', 'march', 'april',
     'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'
   ];
   
-  // Verificación específica para "Read Time"
-  if (text === 'Read Time' || text.toLowerCase() === 'read time') {
-    console.log(`DEBUG: "Read Time" detectado y rechazado por isValidLocation`);
-    return false;
-  }
-  
   const lowerText = text.toLowerCase();
   
-  // Verificar si contiene palabras inválidas
-  for (const invalidWord of invalidWords) {
-    if (lowerText.includes(invalidWord)) {
-      console.log(`DEBUG: Texto "${text}" rechazado por palabra inválida: "${invalidWord}"`);
+  // Verificar si es exactamente uno de los textos de UI
+  for (const uiText of uiTexts) {
+    if (lowerText === uiText || lowerText.includes(uiText)) {
+      console.log(`DEBUG: Texto "${text}" rechazado por ser texto de UI: "${uiText}"`);
       return false;
     }
   }
@@ -490,14 +503,35 @@ function isValidLocation(text) {
       text.match(/^[a-z]+\d+$/) ||
       text.match(/\d{4}-\d{2}-\d{2}/) || // fechas
       text.match(/\d{2}:\d{2}/) || // horas
-      text.match(/^\d+[a-z]+\d+$/)) { // patrones como "2days"
+      text.match(/^\d+[a-z]+\d+$/) || // patrones como "2days"
+      text.match(/^< \d+[a-z]+$/) || // patrones como "< 1m"
+      text.match(/^\d+[a-z]+$/) || // patrones como "2h", "3mon"
+      text.match(/^[a-z]+\d+[a-z]+$/)) { // patrones como "mar2h"
     console.log(`DEBUG: Texto "${text}" rechazado por patrón inválido`);
     return false;
   }
   
-  // Debe tener al menos una letra mayúscula (países suelen empezar con mayúscula)
-  if (!/[A-Z]/.test(text)) {
-    console.log(`DEBUG: Texto "${text}" rechazado por no tener mayúscula`);
+  // Verificar si contiene solo caracteres especiales o símbolos
+  if (text.match(/^[^a-zA-Z0-9\s,.-]+$/)) {
+    console.log(`DEBUG: Texto "${text}" rechazado por contener solo caracteres especiales`);
+    return false;
+  }
+  
+  // Verificar si es muy corto y no parece una ubicación
+  if (text.length < 3 && !text.match(/^[A-Z][a-z]+$/)) {
+    console.log(`DEBUG: Texto "${text}" rechazado por ser muy corto`);
+    return false;
+  }
+  
+  // Verificar si contiene al menos una letra
+  if (!/[a-zA-Z]/.test(text)) {
+    console.log(`DEBUG: Texto "${text}" rechazado por no contener letras`);
+    return false;
+  }
+  
+  // Verificar si parece un username (solo minúsculas, números, puntos, guiones bajos)
+  if (text.match(/^[a-z0-9._-]+$/) && text.length > 3) {
+    console.log(`DEBUG: Texto "${text}" rechazado por parecer username`);
     return false;
   }
   
