@@ -219,26 +219,12 @@ function extractLocationFromDOM(username) {
         const text = element.textContent.trim();
         
         // Buscar patrones de ubicación comunes
-        if (text && text.length > 2 && text.length < 100) {
-          // Patrones que indican ubicación
-          if (text.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) && 
-              !text.includes('@') && 
-              !text.includes('http') &&
-              !text.includes('www') &&
-              !text.match(/^\d+$/) &&
-              !text.includes('Joined') &&
-              !text.includes('Posts') &&
-              !text.includes('Topics') &&
-              !text.includes('Likes') &&
-              !text.includes('Last') &&
-              !text.includes('Seen')) {
-            
-            // Verificar si es un país conocido
-            const country = extractCountryFromLocation(text);
-            if (country !== 'Sin ubicación') {
-              location = country;
-              break;
-            }
+        if (isValidLocation(text)) {
+          // Verificar si es un país conocido
+          const country = extractCountryFromLocation(text);
+          if (country !== 'Sin ubicación') {
+            location = country;
+            break;
           }
         }
       }
@@ -262,17 +248,7 @@ function extractLocationFromDOM(username) {
           const cellText = cell.textContent.trim();
           
           // Buscar patrones de ubicación en las celdas
-          if (cellText && cellText.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) && 
-              cellText.length > 2 && cellText.length < 50 &&
-              !cellText.includes('@') && 
-              !cellText.includes('http') &&
-              !cellText.match(/^\d+$/) &&
-              !cellText.includes('Joined') &&
-              !cellText.includes('Posts') &&
-              !cellText.includes('Topics') &&
-              !cellText.includes('Likes') &&
-              !cellText.includes('Last') &&
-              !cellText.includes('Seen')) {
+          if (isValidLocation(cellText)) {
             
             const country = extractCountryFromLocation(cellText);
             if (country !== 'Sin ubicación') {
@@ -300,18 +276,18 @@ function extractLocationFromDOM(username) {
         const text = (title + ' ' + dataLocation).trim();
         const country = extractCountryFromLocation(text);
         if (country !== 'Sin ubicación') {
-        location = country;
+          location = country;
           break;
         }
       }
     }
-      }
+  }
       
-      // Guardar en cache
-      userLocationCache.set(username, location);
+  // Guardar en cache
+  userLocationCache.set(username, location);
   saveCacheToStorage();
   
-      return location;
+  return location;
 }
 
 // Función para obtener ubicación (ahora sin API calls)
@@ -440,9 +416,64 @@ function setupInfiniteScrollObserver() {
 // Inicializar cache al cargar
 loadCacheFromStorage();
 
+// Función para validar si un texto es una ubicación válida
+function isValidLocation(text) {
+  if (!text || text.length < 2 || text.length > 100) {
+    return false;
+  }
+  
+  // Lista de palabras que NO son ubicaciones
+  const invalidWords = [
+    'read', 'time', 'read time', 'joined', 'posts', 'topics', 'likes', 
+    'last', 'seen', 'active', 'new', 'staff', 'suspended', 'silenced', 
+    'staged', 'trust', 'level', 'admin', 'moderator', 'user', 'member',
+    'online', 'offline', 'away', 'busy', 'do not disturb', 'status',
+    'profile', 'avatar', 'email', 'username', 'name', 'title', 'role',
+    'permissions', 'settings', 'preferences', 'account', 'login', 'logout',
+    'search', 'filter', 'sort', 'order', 'date', 'created', 'updated',
+    'deleted', 'archived', 'hidden', 'private', 'public', 'draft',
+    'published', 'pending', 'approved', 'rejected', 'flagged', 'reported',
+    'banned', 'muted', 'warned', 'suspended', 'restricted', 'limited'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  
+  // Verificar si contiene palabras inválidas
+  for (const invalidWord of invalidWords) {
+    if (lowerText.includes(invalidWord)) {
+      return false;
+    }
+  }
+  
+  // Verificar patrones de texto que NO son ubicaciones
+  if (text.includes('@') || 
+      text.includes('http') ||
+      text.includes('www') ||
+      text.match(/^\d+$/) ||
+      text.match(/^\d+[a-z]*$/) ||
+      text.match(/^[a-z]+\d+$/) ||
+      text.match(/\d{4}-\d{2}-\d{2}/) || // fechas
+      text.match(/\d{2}:\d{2}/) || // horas
+      text.match(/^\d+[a-z]+\d+$/)) { // patrones como "2days"
+    return false;
+  }
+  
+  // Debe tener al menos una letra mayúscula (países suelen empezar con mayúscula)
+  if (!/[A-Z]/.test(text)) {
+    return false;
+  }
+  
+  return true;
+}
+
 // Función para extraer el país de la ubicación (basada en tu script de Python)
 function extractCountryFromLocation(location) {
   if (!location || location === 'N/A') {
+    return 'Sin ubicación';
+  }
+
+  // Validar que sea una ubicación válida
+  if (!isValidLocation(location)) {
     return 'Sin ubicación';
   }
 
@@ -450,7 +481,7 @@ function extractCountryFromLocation(location) {
   if (location.includes(',')) {
     const parts = location.split(',');
     const country = parts[parts.length - 1].trim();
-    return country;
+    return isValidLocation(country) ? country : 'Sin ubicación';
   }
 
   // Si no hay coma, asumir que es solo el país
