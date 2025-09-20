@@ -307,6 +307,78 @@ function extractLocationFromDOM(username) {
       }
     }
   }
+  
+  // Si aún no se encontró, buscar en todos los elementos de la fila del usuario
+  if (location === 'N/A') {
+    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+    
+    if (userRow) {
+      console.log(`DEBUG: Buscando en todos los elementos de la fila para usuario ${username}`);
+      
+      // Buscar en todos los elementos de la fila, incluyendo elementos anidados
+      const allElements = userRow.querySelectorAll('*');
+      console.log(`DEBUG: Encontrados ${allElements.length} elementos en la fila para usuario ${username}`);
+      
+      for (const element of allElements) {
+        const text = element.textContent.trim();
+        
+        // Solo procesar texto que no sea muy largo y que no sea el username
+        if (text.length > 2 && text.length < 50 && text !== username) {
+          if (isValidLocation(text)) {
+            const country = extractCountryFromLocation(text);
+            if (country !== 'Sin ubicación') {
+              location = country;
+              console.log(`DEBUG: Ubicación encontrada en elemento para usuario ${username}: "${text}" -> "${country}"`);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Si aún no se encontró, buscar en atributos title y data-* de todos los elementos
+  if (location === 'N/A') {
+    const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+    
+    if (userRow) {
+      console.log(`DEBUG: Buscando en atributos de la fila para usuario ${username}`);
+      
+      const allElements = userRow.querySelectorAll('*');
+      
+      for (const element of allElements) {
+        // Buscar en atributos title
+        const title = element.getAttribute('title');
+        if (title && title.length > 2 && title.length < 50) {
+          if (isValidLocation(title)) {
+            const country = extractCountryFromLocation(title);
+            if (country !== 'Sin ubicación') {
+              location = country;
+              console.log(`DEBUG: Ubicación encontrada en atributo title para usuario ${username}: "${title}" -> "${country}"`);
+              break;
+            }
+          }
+        }
+        
+        // Buscar en atributos data-*
+        const attributes = element.attributes;
+        for (const attr of attributes) {
+          if (attr.name.startsWith('data-') && attr.value && attr.value.length > 2 && attr.value.length < 50) {
+            if (isValidLocation(attr.value)) {
+              const country = extractCountryFromLocation(attr.value);
+              if (country !== 'Sin ubicación') {
+                location = country;
+                console.log(`DEBUG: Ubicación encontrada en atributo ${attr.name} para usuario ${username}: "${attr.value}" -> "${country}"`);
+                break;
+              }
+            }
+          }
+        }
+        
+        if (location !== 'N/A') break;
+      }
+    }
+  }
       
   // Debug si se está guardando "Read Time"
   if (location === 'Read Time') {
@@ -1327,11 +1399,65 @@ function showCacheStats() {
   return { cacheSize, localStorageSize };
 }
 
+// Función para debuggear el DOM de un usuario específico
+function debugUserDOM(username) {
+  console.log(`=== DEBUG DOM para usuario: ${username} ===`);
+  
+  const userRow = document.querySelector(`a[href*="/u/${username}"]`)?.closest('.directory-table__row, tr');
+  
+  if (!userRow) {
+    console.log(`No se encontró fila para usuario ${username}`);
+    return;
+  }
+  
+  console.log(`Fila encontrada para usuario ${username}:`);
+  console.log(userRow);
+  
+  // Mostrar todo el contenido de texto de la fila
+  const allElements = userRow.querySelectorAll('*');
+  console.log(`Total de elementos en la fila: ${allElements.length}`);
+  
+  const textContents = [];
+  allElements.forEach((element, index) => {
+    const text = element.textContent.trim();
+    if (text && text.length > 0 && text.length < 100) {
+      textContents.push({
+        index: index,
+        tagName: element.tagName,
+        className: element.className,
+        text: text
+      });
+    }
+  });
+  
+  console.log('Contenidos de texto encontrados:');
+  textContents.forEach(item => {
+    console.log(`[${item.index}] ${item.tagName}.${item.className}: "${item.text}"`);
+  });
+  
+  // Mostrar atributos de todos los elementos
+  console.log('Atributos encontrados:');
+  allElements.forEach((element, index) => {
+    const attributes = element.attributes;
+    if (attributes.length > 0) {
+      console.log(`[${index}] ${element.tagName}.${element.className}:`);
+      for (const attr of attributes) {
+        if (attr.value && attr.value.length > 0 && attr.value.length < 100) {
+          console.log(`  ${attr.name}: "${attr.value}"`);
+        }
+      }
+    }
+  });
+  
+  console.log(`=== FIN DEBUG DOM para usuario: ${username} ===`);
+}
+
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.cleanNACacheEntries = cleanNACacheEntries;
 window.showCacheStats = showCacheStats;
+window.debugUserDOM = debugUserDOM;
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
