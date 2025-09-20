@@ -314,13 +314,51 @@ function findLocationInTableRow(row, username) {
     const text = cell.textContent.trim();
     
     // Saltar celdas que obviamente no contienen ubicación
-    if (text === username || text.includes('@') || text.includes('http') || 
-        text.match(/^\d+$/) || text.match(/^\d+[a-z]+$/) || 
-        text.match(/\d{4}-\d{2}-\d{2}/) || text.match(/\d{2}:\d{2}/)) {
+    if (text === username || 
+        text.includes('@') || 
+        text.includes('http') || 
+        text.includes('www') ||
+        text.match(/^\d+$/) || 
+        text.match(/^\d+[a-z]+$/) || 
+        text.match(/\d{4}-\d{2}-\d{2}/) || 
+        text.match(/\d{2}:\d{2}/) ||
+        text.match(/^\d+[a-z]+\d+$/) ||
+        text.match(/^< \d+[a-z]+$/) ||
+        text.match(/^\d+[a-z]+$/) ||
+        text.match(/^\d{4} \d{1,2}:\d{2} [ap]m$/) ||
+        text.match(/^[A-Za-z]{3} \d{1,2}, \d{4} \d{1,2}:\d{2} [ap]m$/) ||
+        text.match(/^[A-Za-z]{3} \d{1,2}, \d{4}$/) ||
+        text.match(/^\d{1,2}:\d{2} [ap]m$/) ||
+        text.match(/^\d{4}$/) ||
+        text.match(/^\d{1,2}:\d{2}$/) ||
+        text.match(/^[A-Za-z]{3} \d{1,2}$/) ||
+        text.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/) ||
+        text.match(/^\d{4}-\d{1,2}-\d{1,2}$/) ||
+        // Texto de UI común
+        text.toLowerCase().includes('last emailed') ||
+        text.toLowerCase().includes('read time') ||
+        text.toLowerCase().includes('seen') ||
+        text.toLowerCase().includes('topics viewed') ||
+        text.toLowerCase().includes('posts read') ||
+        text.toLowerCase().includes('created') ||
+        text.toLowerCase().includes('status') ||
+        text.toLowerCase().includes('joined') ||
+        text.toLowerCase().includes('posts') ||
+        text.toLowerCase().includes('topics') ||
+        text.toLowerCase().includes('likes') ||
+        text.toLowerCase().includes('active') ||
+        text.toLowerCase().includes('admin') ||
+        text.toLowerCase().includes('moderator') ||
+        text.toLowerCase().includes('user') ||
+        text.toLowerCase().includes('member') ||
+        text.toLowerCase().includes('online') ||
+        text.toLowerCase().includes('offline') ||
+        text.toLowerCase().includes('away')) {
       continue;
     }
     
     if (isValidLocationSimple(text)) {
+      console.log(`Ubicación válida encontrada en fila: "${text}"`);
       return extractCountryFromLocation(text);
     }
   }
@@ -376,16 +414,21 @@ function processNewRows() {
   if (newRows.length > 0) {
     console.log(`Procesando ${newRows.length} nuevas filas`);
     
-    // Procesar las nuevas filas
-    newRows.forEach(row => {
-      addLocationCellToModernRow(row);
-    });
-    
-    // Actualizar la lista de filas de datos
-    currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
-    
-    // Actualizar el contador y filtro
-    updateFilterAndCounter();
+    // Procesar las nuevas filas con delay para asegurar que el DOM esté renderizado
+    setTimeout(() => {
+      newRows.forEach((row, index) => {
+        // Procesar con delay escalonado para evitar problemas de rendimiento
+        setTimeout(() => {
+          addLocationCellToModernRow(row);
+        }, index * 50); // 50ms entre cada fila
+      });
+      
+      // Actualizar después de un delay adicional
+      setTimeout(() => {
+        currentDataRows = Array.from(currentTable.querySelectorAll('.directory-table__row, tr'));
+        updateFilterAndCounter();
+      }, newRows.length * 50 + 100);
+    }, 200); // Esperar 200ms antes de procesar
   }
 }
 
@@ -435,6 +478,8 @@ function updateLocationOptions() {
 function setupInfiniteScrollObserver() {
   if (!currentTable) return;
   
+  let processingTimeout = null;
+  
   // Crear un observer para detectar cambios en el DOM
   const observer = new MutationObserver(function(mutations) {
     let shouldProcess = false;
@@ -454,9 +499,16 @@ function setupInfiniteScrollObserver() {
     });
     
     if (shouldProcess) {
-      // Usar setTimeout para evitar procesar demasiado frecuentemente
-      // Aumentar delay para asegurar que el DOM esté completamente renderizado
-      setTimeout(processNewRows, 500);
+      // Limpiar timeout anterior si existe
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+      }
+      
+      // Usar setTimeout con delay más largo para asegurar que el DOM esté completamente renderizado
+      processingTimeout = setTimeout(() => {
+        console.log('MutationObserver detectó nuevas filas, procesando...');
+        processNewRows();
+      }, 1000); // Aumentar a 1 segundo para asegurar renderizado completo
     }
   });
   
@@ -475,7 +527,7 @@ function setupInfiniteScrollObserver() {
     subtree: true
   });
   
-  console.log('MutationObserver configurado para scroll infinito');
+  console.log('MutationObserver configurado para scroll infinito con delay de 1 segundo');
 }
 
 // Inicializar cache al cargar
@@ -1429,12 +1481,48 @@ function debugUserDOM(username) {
   console.log(`=== FIN DEBUG DOM para usuario: ${username} ===`);
 }
 
+// Función para debuggear el tercer scroll específicamente
+function debugThirdScroll() {
+  console.log('=== DEBUG TERCER SCROLL ===');
+  
+  if (!currentTable) {
+    console.log('No hay tabla actual');
+    return;
+  }
+  
+  const allRows = currentTable.querySelectorAll('.directory-table__row, tr');
+  console.log(`Total de filas en la tabla: ${allRows.length}`);
+  
+  // Buscar filas sin columna de ubicación
+  const rowsWithoutLocation = [];
+  allRows.forEach((row, index) => {
+    if (!row.querySelector('.location-column-data')) {
+      rowsWithoutLocation.push({ index, row });
+    }
+  });
+  
+  console.log(`Filas sin columna de ubicación: ${rowsWithoutLocation.length}`);
+  
+  if (rowsWithoutLocation.length > 0) {
+    console.log('Primeras 3 filas sin ubicación:');
+    rowsWithoutLocation.slice(0, 3).forEach(({ index, row }) => {
+      const usernameLink = row.querySelector('a[href*="/u/"]');
+      const username = usernameLink ? usernameLink.href.split('/u/')[1] : 'unknown';
+      console.log(`Fila ${index}: ${username}`);
+      console.log('Contenido:', row.textContent.trim().substring(0, 200) + '...');
+    });
+  }
+  
+  console.log('=== FIN DEBUG TERCER SCROLL ===');
+}
+
 // Hacer funciones disponibles globalmente para debugging
 window.clearLocationCache = clearLocationCache;
 window.cleanInvalidCacheEntries = cleanInvalidCacheEntries;
 window.cleanDateTimeCacheEntries = cleanDateTimeCacheEntries;
 window.showCacheStats = showCacheStats;
 window.debugUserDOM = debugUserDOM;
+window.debugThirdScroll = debugThirdScroll;
 
 // Función principal que se ejecuta cuando Discourse esté listo
 async function initLocationColumn() {
