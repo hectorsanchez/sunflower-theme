@@ -10,6 +10,10 @@
   "assets": {
   },
   
+  "locales": {
+    "es": "locales/client.es.yml"
+  },
+  
   "color_schemes": {
     "Sunflower": {
       "primary": "090707",
