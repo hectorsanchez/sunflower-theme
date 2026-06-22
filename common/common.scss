@@ -185,7 +185,7 @@ a {
 }
 
 .btn-danger {
-    background-color: $danger;
+    background-color: var(--danger);
     color: $colour-white;
 
     .d-icon {
@@ -205,7 +205,7 @@ a {
         &:hover, 
         &.btn-hover {
             color: $colour-cream;
-            background: $danger-medium;
+            background: var(--danger-medium, var(--danger));
             
             .d-icon {
                 color: $colour-cream;
@@ -267,7 +267,7 @@ textarea:focus {
 .d-time-input .fields, 
 .d-date-time-input, 
 .d-date-time-input-range {
-    border-color: $primary-medium;
+    border-color: var(--primary-medium);
     border-radius: $radius-4;
 }
 
@@ -301,7 +301,6 @@ textarea:focus {
             border-radius: $radius-4; 
 
             &.is-focused {
-                box-shadow: shadow("focus");
                 border-radius: 0;
 
                 // box-shadow: 0 0 4px 0 $colour-yellow-03;
@@ -704,19 +703,19 @@ img {
         background: $colour-yellow-01;
 
         &:before {
-            border-top: 3px double $primary;
+            border-top: 3px double var(--primary);
         }
     }
 }
 
 #reply-control.draft, #reply-control.saving {
     background: $colour-yellow-01;
-    color: $primary;
+    color: var(--primary);
     flex-direction: row;
 
     .composer-controls {
         .d-icon {
-            color: $primary;
+            color: var(--primary);
         }
     }
 
@@ -807,7 +806,7 @@ img {
     .search-advanced-sidebar {
 
         .search-advanced-title {
-            background: $highlight;
+            background: var(--highlight);
         }
 
         .search-advanced-filters {
@@ -875,7 +874,7 @@ div.ac-wrap {
 
         > div,
         > div a {
-            color: $primary;
+            color: var(--primary);
 
             span {
                 height: 3px;
